@@ -1,0 +1,15 @@
+__pycache__/
+*.py[codz]
+*.so
+.venv/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.rdb
+*.aof
+*.pid
+
+.env
