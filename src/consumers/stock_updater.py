@@ -1,6 +1,7 @@
 import time
 import redis
 from sqlalchemy.exc import IntegrityError
+from src.config import CLAIM_INTERVAL_SECONDS
 from src.events.bus import claim_pending_events, read_event, r
 from src.db.session import SessionLocal
 from src.db.models import InventoryItem, InventoryTransaction
@@ -15,7 +16,6 @@ SUBTRACT_TYPES = {
 }
 
 INVENTORY_STREAM = f"{EventCategory.INVENTORY.value}_events"
-CLAIM_INTERVAL_SECONDS = 30
 
 
 def process_events(events: list[dict]) -> None:

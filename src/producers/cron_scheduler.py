@@ -15,15 +15,15 @@ from src.schemas.event import EventCategory, SystemEventType, WorkforceEventType
 scheduler = BlockingScheduler()
 
 
-def day_open():
+def day_open() -> None:
     publish_event(EventCategory.SYSTEM, SystemEventType.DAY_OPENED.value, "4", {})
 
 
-def day_close():
+def day_close() -> None:
     publish_event(EventCategory.SYSTEM, SystemEventType.DAY_CLOSED.value, "4", {})
 
 
-def request_schedule_generation():
+def request_schedule_generation() -> None:
     publish_event(
         EventCategory.WORKFORCE,
         WorkforceEventType.SCHEDULE_GENERATION_REQUESTED.value,
