@@ -5,7 +5,6 @@ from sqlalchemy import (
     CheckConstraint,
     ForeignKey,
     Numeric,
-    String,
     Text,
     UniqueConstraint,
 )
