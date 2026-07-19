@@ -2,9 +2,9 @@ from decimal import Decimal
 
 from sqlalchemy import text
 
-from src.db.models import InventoryItem, Tenant
+from services.tenant_service import create_tenant
+from src.db.models import InventoryItem
 from src.db.session import SessionLocal
-from src.services.tenant import create_tenant, get_system_timezone
 from src.schemas.tenant import ShopType
 
 SEED_ITEMS = [
