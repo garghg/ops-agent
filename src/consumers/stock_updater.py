@@ -1,5 +1,6 @@
 import time
 import redis
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from src.config import CLAIM_INTERVAL_SECONDS
 from src.events.bus import claim_pending_events, read_event, r
@@ -22,6 +23,7 @@ def process_events(events: list[dict]) -> None:
     for event in events:
         try:
             payload = InventoryEventPayload(**event["payload"])
+            tenant_id = event["tenant_id"]
         except Exception as e:
             print(f"Bad payload, dropping event {event['id']}: {e}")
             r.xack(INVENTORY_STREAM, ConsumerGroup.STOCK_UPDATER.value, event["id"])
@@ -30,7 +32,12 @@ def process_events(events: list[dict]) -> None:
         try:
             with SessionLocal() as session:
                 with session.begin():
-                    item = session.get(InventoryItem, payload.item_id)
+                    item = session.scalar(
+                        select(InventoryItem).where(
+                            InventoryItem.id == payload.item_id,
+                            InventoryItem.tenant_id == tenant_id,
+                        )
+                    )
                     if item is None:
                         raise ValueError(f"item_id {payload.item_id} not found")
 
@@ -47,6 +54,7 @@ def process_events(events: list[dict]) -> None:
                             transaction_type=payload.transaction_type,
                             note=payload.note,
                             event_id=event["id"],
+                            tenant_id=tenant_id
                         )
                     )
         except ValueError as e:
@@ -54,7 +62,7 @@ def process_events(events: list[dict]) -> None:
             r.xack(INVENTORY_STREAM, ConsumerGroup.STOCK_UPDATER.value, event["id"])
             continue
         except IntegrityError as e:
-            if "inventory_transactions_event_id_key" in str(e.orig):
+            if "inventory_transactions_tenant_id_event_id_key" in str(e.orig):
                 print(f"Event {event['id']} already processed, skipping.")
             else:
                 raise

@@ -13,11 +13,30 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.sql import func
 from src.schemas.inventory import InventoryTransactionType
 from src.schemas.tenant import ShopType
-from src.db.tenant import get_system_timezone
 
 
 class Base(DeclarativeBase):
     pass
+
+class Tenant(Base):
+    __tablename__ = "tenants"
+    __table_args__ = (
+        CheckConstraint(
+            f"shop_type IN ({', '.join(repr(t.value) for t in ShopType)})",
+            name="tenants_shop_type_check",
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    location: Mapped[str] = mapped_column(Text, nullable=False)
+    slug: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    timezone: Mapped[str] = mapped_column(Text, nullable=False)
+    shop_type: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class InventoryItem(Base):
@@ -39,6 +58,11 @@ class InventoryItem(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
 
 
 class InventoryTransaction(Base):
@@ -48,7 +72,11 @@ class InventoryTransaction(Base):
             f"transaction_type IN ({', '.join(repr(t.value) for t in InventoryTransactionType)})",
             name="inventory_transactions_transaction_type_check",
         ),
-        UniqueConstraint("event_id", name="inventory_transactions_event_id_key"),
+        UniqueConstraint(
+            "tenant_id",
+            "event_id",
+            name="inventory_transactions_tenant_id_event_id_key",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -69,24 +97,8 @@ class InventoryTransaction(Base):
     )
     note: Mapped[str | None] = mapped_column(Text)
     event_id: Mapped[str] = mapped_column(Text, nullable=False)
-
-
-class Tenant(Base):
-    __tablename__ = "tenants"
-    __table_args__ = (
-        CheckConstraint(
-            f"shop_type IN ({', '.join(repr(t.value) for t in ShopType)})",
-            name="tenants_shop_type_check",
-        ),
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="RESTRICT"),
+        nullable=False,
     )
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
-    )
-    name: Mapped[str] = mapped_column(Text, nullable=False)
-    location: Mapped[str] = mapped_column(Text, nullable=False)
-    slug: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
-    )
-    timezone: Mapped[str] = mapped_column(Text, nullable=False)
-    shop_type: Mapped[str] = mapped_column(Text, nullable=False)

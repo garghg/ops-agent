@@ -2,8 +2,10 @@ from decimal import Decimal
 
 from sqlalchemy import text
 
-from src.db.models import InventoryItem
+from src.db.models import InventoryItem, Tenant
 from src.db.session import SessionLocal
+from src.services.tenant import create_tenant, get_system_timezone
+from src.schemas.tenant import ShopType
 
 SEED_ITEMS = [
     dict(
@@ -122,13 +124,24 @@ def seed() -> None:
         with session.begin():
             session.execute(
                 text(
-                    "TRUNCATE TABLE inventory_transactions, inventory_items "
+                    "TRUNCATE TABLE inventory_transactions, inventory_items, tenants "
                     "RESTART IDENTITY CASCADE"
                 )
             )
-            session.add_all(InventoryItem(**item) for item in SEED_ITEMS)
 
-    print(f"Seeded {len(SEED_ITEMS)} inventory items.")
+            tenant = create_tenant(
+                name="Dev Shop",
+                location="Vancouver",
+                shop_type=ShopType.ICE_CREAM,
+                session=session,
+            )
+            session.flush()
+
+            session.add_all(
+                InventoryItem(**item, tenant_id=tenant.id) for item in SEED_ITEMS
+            )
+
+    print(f"Seeded 1 tenant and {len(SEED_ITEMS)} inventory items.")
 
 
 if __name__ == "__main__":

@@ -15,13 +15,14 @@ r = redis.Redis(
 
 
 def publish_event(
-    category: EventCategory, event_type: str, priority: str, payload: dict
+    category: EventCategory, event_type: str, priority: str, payload: dict, tenant_id: str
 ) -> str:
     stream = f"{category.value}_events"
     return r.xadd(
         stream,
         {
             "event_type": event_type,
+            "tenant_id": tenant_id,
             "priority": priority,
             "payload": json.dumps(payload),
         },
@@ -41,6 +42,7 @@ def _to_event_dict(message_id: str, fields: dict) -> dict:
     return {
         "id": message_id,
         "event_type": fields["event_type"],
+        "tenant_id": fields["tenant_id"],
         "priority": fields["priority"],
         "payload": json.loads(fields["payload"]),
     }
