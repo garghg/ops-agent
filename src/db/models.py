@@ -17,6 +17,7 @@ from sqlalchemy.sql import func
 from src.schemas.email import EmailStatus
 from src.schemas.inventory import InventoryTransactionType
 from src.schemas.tenant import ShopType
+from decimal import Decimal
 
 
 class Base(DeclarativeBase):
@@ -88,12 +89,12 @@ class InventoryItem(Base):
         UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
-    quantity_on_hand: Mapped[float] = mapped_column(
+    quantity_on_hand: Mapped[Decimal] = mapped_column(
         Numeric(10, 2), nullable=False, server_default="0"
     )
-    reorder_point: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
-    reorder_quantity: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
-    cost_per_unit: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    reorder_point: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    reorder_quantity: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    cost_per_unit: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     supplier: Mapped[str | None] = mapped_column(Text)
     shelf_life_days: Mapped[int | None] = mapped_column()
     last_restocked_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
@@ -105,6 +106,7 @@ class InventoryItem(Base):
         ForeignKey("tenants.id", ondelete="RESTRICT"),
         nullable=False,
     )
+    unit: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class InventoryTransaction(Base):
@@ -129,7 +131,7 @@ class InventoryTransaction(Base):
         ForeignKey("inventory_items.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    quantity_change: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    quantity_change: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     transaction_type: Mapped[str] = mapped_column(Text, nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
@@ -179,4 +181,125 @@ class EmailOutbox(Base):
     sent_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
     dev_mode: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")
+    )
+
+
+class CatalogItem(Base):
+    __tablename__ = "catalog_items"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="catalog_items_tenant_id_name_key"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(Text, nullable=False)
+    sale_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class CatalogModifier(Base):
+    __tablename__ = "catalog_modifiers"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "name", name="catalog_modifiers_tenant_id_name_key"
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class BOMLine(Base):
+    __tablename__ = "bom_lines"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "catalog_item_id",
+            "catalog_modifier_id",
+            "inventory_item_id",
+            name="bom_lines_tenant_item_modifier_inventory_key",
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    catalog_item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("catalog_items.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    catalog_modifier_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("catalog_modifiers.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    inventory_item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("inventory_items.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    quantity: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    unit: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+class MappingGap(Base):
+    __tablename__ = "mapping_gaps"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "external_item_name",
+            "external_modifier_name",
+            name="mapping_gaps_tenant_item_modifier_key",
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    external_item_name: Mapped[str] = mapped_column(Text, nullable=False)
+    external_modifier_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source: Mapped[str] = mapped_column(Text, nullable=False)
+    resolved: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    occurrence_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="1"
+    )
+    first_seen_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )
