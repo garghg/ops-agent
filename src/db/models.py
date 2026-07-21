@@ -303,3 +303,5 @@ class MappingGap(Base):
     first_seen_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )
+    
+    
