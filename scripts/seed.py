@@ -2,8 +2,9 @@ from decimal import Decimal
 
 from sqlalchemy import text
 
+from src.schemas.template import TemplateConfig
 from services.tenant_service import create_tenant
-from src.db.models import InventoryItem
+from src.db.models import InventoryItem, Template
 from src.db.session import SessionLocal
 from src.schemas.tenant import ShopType
 
@@ -124,16 +125,25 @@ def seed() -> None:
         with session.begin():
             session.execute(
                 text(
-                    "TRUNCATE TABLE inventory_transactions, inventory_items, tenants "
+                    "TRUNCATE TABLE inventory_transactions, inventory_items, tenant_configs, tenants, templates "
                     "RESTART IDENTITY CASCADE"
                 )
             )
+            
+            template = Template(
+                slug="icecream-v1",
+                version=1,
+                body=TemplateConfig().model_dump(),
+            )
+            session.add(template)
+            session.flush()
 
             tenant = create_tenant(
                 name="Dev Shop",
                 location="Vancouver",
                 shop_type=ShopType.ICE_CREAM,
                 session=session,
+                template_id=template.id,
             )
             session.flush()
 

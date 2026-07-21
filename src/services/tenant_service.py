@@ -22,13 +22,22 @@ def slugify(name: str, location: str, session: Session) -> str:
 def get_system_timezone() -> str:
     return str(get_localzone())
 
-def create_tenant(name: str, location: str, shop_type: ShopType, session: Session, timezone: str | None = None) -> Tenant:
+
+def create_tenant(
+    name: str,
+    location: str,
+    shop_type: ShopType,
+    session: Session,
+    template_id: str,
+    timezone: str | None = None,
+) -> Tenant:
     tenant = Tenant(
         name=name,
         location=location,
         slug=slugify(name, location, session),
         timezone=timezone or get_system_timezone(),
         shop_type=shop_type.value,
+        template_id=template_id
     )
     session.add(tenant)
     return tenant

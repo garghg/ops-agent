@@ -6,9 +6,11 @@ from sqlalchemy import (
     ForeignKey,
     Numeric,
     Text,
+    Integer,
     UniqueConstraint,
+    text,
 )
-from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
+from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.sql import func
 from src.schemas.inventory import InventoryTransactionType
@@ -17,6 +19,39 @@ from src.schemas.tenant import ShopType
 
 class Base(DeclarativeBase):
     pass
+
+
+class Template(Base):
+    __tablename__ = "templates"
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    slug: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    body: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class TenantConfig(Base):
+    __tablename__ = "tenant_configs"
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="RESTRICT"),
+        nullable=False,
+        unique=True,
+    )
+    overrides: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
 
 class Tenant(Base):
     __tablename__ = "tenants"
@@ -37,6 +72,11 @@ class Tenant(Base):
     )
     timezone: Mapped[str] = mapped_column(Text, nullable=False)
     shop_type: Mapped[str] = mapped_column(Text, nullable=False)
+    template_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("templates.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
 
 
 class InventoryItem(Base):
