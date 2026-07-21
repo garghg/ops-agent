@@ -3,7 +3,7 @@ from decimal import Decimal
 from sqlalchemy import text
 
 from src.schemas.template import TemplateConfig
-from services.tenant_service import create_tenant
+from src.services.tenant_service import create_tenant
 from src.db.models import InventoryItem, Template
 from src.db.session import SessionLocal
 from src.schemas.tenant import ShopType
