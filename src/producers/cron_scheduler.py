@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from src.clock import get_now
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -16,7 +16,7 @@ scheduler = BlockingScheduler()
 def poll_shop_times() -> None:
     with SessionLocal() as session:
         tenants = session.scalars(select(Tenant)).all()
-        utc_time = datetime.now(timezone.utc)
+        utc_time = get_now()
         for tenant in tenants:
             local_time = utc_time.astimezone(ZoneInfo(tenant.timezone))
             config = resolve_config(str(tenant.id), session)
