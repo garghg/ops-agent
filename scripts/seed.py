@@ -7,6 +7,9 @@ from src.services.tenant_service import create_tenant
 from src.db.models import InventoryItem, Template
 from src.db.session import SessionLocal
 from src.schemas.tenant import ShopType
+from src.logging import setup_logging, get_logger
+
+log = get_logger("seed")
 
 SEED_ITEMS = [
     dict(
@@ -151,8 +154,9 @@ def seed() -> None:
                 InventoryItem(**item, tenant_id=tenant.id) for item in SEED_ITEMS
             )
 
-    print(f"Seeded 1 tenant and {len(SEED_ITEMS)} inventory items.")
+    log.info("seed_complete", tenants=1, inventory_items=len(SEED_ITEMS))
 
 
 if __name__ == "__main__":
+    setup_logging()
     seed()
