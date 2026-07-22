@@ -24,7 +24,9 @@ class WorkforceEventType(str, Enum):
 
 class ConsumerGroup(str, Enum):
     STOCK_UPDATER = "stock_updater"
+    BOM_CONSUMER = "bom_consumer"
 
 
 class InventoryEventType(str, Enum):
     BELOW_REORDER_POINT = "below_reorder_point"
+    BOM_DEPLETION = "bom_depletion"

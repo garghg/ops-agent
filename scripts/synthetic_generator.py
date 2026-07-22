@@ -1,7 +1,7 @@
 from math import sin, pi
 import random
 from datetime import datetime, date, timedelta
-from uuid import UUID, uuid4
+from uuid import uuid4
 from src.events.bus import publish_event
 from src.db.models import CatalogItem, CatalogModifier, Tenant
 from src.db.session import SessionLocal
