@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 load_dotenv()
-os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
+os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL", os.environ["DATABASE_URL"])
 import pytest  # noqa: E402
 from src.db.session import SessionLocal  # noqa: E402
 from src.db.models import Base  # noqa: E402
