@@ -15,7 +15,11 @@ r = redis.Redis(
 
 
 def publish_event(
-    category: EventCategory, event_type: str, priority: str, payload: dict, tenant_id: str
+    category: EventCategory,
+    event_type: str,
+    priority: str,
+    payload: dict,
+    tenant_id: str,
 ) -> str:
     stream = f"{category.value}_events"
     return r.xadd(
@@ -102,7 +106,6 @@ def claim_pending_events(
 
         for message_id, fields in claimed_messages:
             claimed.append(_to_event_dict(message_id, fields))
-
 
         if deleted_messages:
             r.xack(stream, group_name, *deleted_messages)

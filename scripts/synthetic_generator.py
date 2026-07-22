@@ -1,7 +1,12 @@
 from math import sin, pi
 import random
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from uuid import UUID, uuid4
+from src.events.bus import publish_event
+from src.db.models import CatalogItem, CatalogModifier, Tenant
+from src.db.session import SessionLocal
+from src.schemas.event import EventCategory, SalesEventType
+from collections import defaultdict
 
 from src.schemas.sale import SaleEvent, SaleLineItem
 
@@ -47,16 +52,16 @@ def distribute_across_hours(d: date, count: int) -> list[datetime]:
     ]
     return sorted(timestamps)
 
+
 def build_transaction(
     timestamp: datetime,
-    tenant_id: UUID,
     catalog_items: dict,
     modifiers_by_group: dict,
 ) -> SaleEvent:
     item_type = random.choices(
         population=["Single Scoop", "Double Scoop", "Sundae", "Pint"],
         weights=[0.60, 0.30, 0.08, 0.02],
-        k=1
+        k=1,
     )[0]
 
     catalog_item = catalog_items[item_type]
@@ -81,14 +86,52 @@ def build_transaction(
     return SaleEvent(
         external_transaction_id=str(uuid4()),
         source="synthetic",
-        tenant_id=tenant_id,
         timestamp=timestamp,
         line_items=[
             SaleLineItem(
                 item_name=catalog_item.name,
                 modifiers=[m.name for m in mods],
                 quantity=1,
-                unit_price=catalog_item.base_price,
+                unit_price=catalog_item.sale_price,
             )
         ],
+        total=catalog_item.sale_price,
+        payment_method=random.choices(["card", "cash"], weights=[0.85, 0.15], k=1)[0],
     )
+
+
+def generate_sales(start_date: date, end_date: date):
+    with SessionLocal() as session:
+        tenants = session.query(Tenant).all()
+        for tenant in tenants:
+            transactions = []
+            items = (
+                session.query(CatalogItem)
+                .filter_by(tenant_id=tenant.id, is_active=True)
+                .all()
+            )
+            catalog_items = {item.name: item for item in items}
+
+            mods = session.query(CatalogModifier).filter_by(tenant_id=tenant.id).all()
+            modifiers_by_group = defaultdict(list)
+            for mod in mods:
+                modifiers_by_group[mod.category].append(mod)
+
+            current = start_date
+            while current <= end_date:
+                count = generate_daily_volume(current)
+                for i in distribute_across_hours(current, count):
+                    t = build_transaction(
+                        i, catalog_items, modifiers_by_group
+                    )
+                    transactions.append(t)
+                current += timedelta(days=1)
+
+            for t in transactions:
+                publish_event(
+                    EventCategory.SALES,
+                    SalesEventType.SALE_COMPLETED.value,
+                    "2",
+                    t.model_dump(mode="json"),
+                    str(tenant.id),
+                )

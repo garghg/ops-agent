@@ -6,6 +6,11 @@ class EventCategory(str, Enum):
     PROCUREMENT = "procurement"
     WORKFORCE = "workforce"
     SYSTEM = "system"
+    SALES = "sales"
+
+
+class SalesEventType(str, Enum):
+    SALE_COMPLETED = "sale_completed"
 
 
 class SystemEventType(str, Enum):
