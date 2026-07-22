@@ -59,8 +59,8 @@ def build_transaction(
     modifiers_by_group: dict,
 ) -> SaleEvent:
     item_type = random.choices(
-        population=["Single Scoop", "Double Scoop", "Sundae", "Pint"],
-        weights=[0.60, 0.30, 0.08, 0.02],
+        population=["Single Scoop", "Double Scoop", "Sundae"],
+        weights=[0.60, 0.30, 0.10],
         k=1,
     )[0]
 

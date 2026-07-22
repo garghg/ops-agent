@@ -12,7 +12,7 @@ from src.events.bus import claim_pending_events, publish_event, r, read_event
 from src.db.session import SessionLocal
 
 SALES_STREAM = f"{EventCategory.SALES.value}_events"
-log = get_logger()
+log = get_logger(__name__)
 
 
 def process_events(events: list[dict]) -> None:
@@ -82,6 +82,7 @@ def process_events(events: list[dict]) -> None:
                             select(BOMLine).where(
                                 BOMLine.catalog_item_id == catalog_item.id,
                                 BOMLine.catalog_modifier_id == modifier.id,
+                                BOMLine.tenant_id == tenant_id,
                             )
                         )
 
@@ -120,6 +121,7 @@ def process_events(events: list[dict]) -> None:
                         select(BOMLine).where(
                             BOMLine.catalog_item_id == catalog_item.id,
                             BOMLine.catalog_modifier_id.is_(None),
+                            BOMLine.tenant_id == tenant_id,
                         )
                     ).all()
 
