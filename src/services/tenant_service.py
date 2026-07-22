@@ -27,6 +27,7 @@ def get_system_timezone() -> str:
 def create_tenant(
     name: str,
     location: str,
+    address: str,
     shop_type: ShopType,
     session: Session,
     template_id: str,
@@ -39,6 +40,7 @@ def create_tenant(
     tenant = Tenant(
         name=name,
         location=location,
+        address=address,
         slug=slugify(name, location, session),
         timezone=timezone or get_system_timezone(),
         shop_type=shop_type.value,

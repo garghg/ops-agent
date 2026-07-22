@@ -242,6 +242,7 @@ def seed() -> None:
                 shop_type=ShopType.ICE_CREAM,
                 session=session,
                 template_id=template.id,
+                address="123 Main St."
             )
             session.flush()
 
