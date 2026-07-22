@@ -1,4 +1,10 @@
 import httpx
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+from src.db.session import SessionLocal
+from src.db.models import Tenant, WeatherObservation
+from sqlalchemy.dialects.postgresql import insert
+from datetime import date, timedelta
 
 
 def geocode(city: str) -> tuple[float, float, str]:
@@ -57,3 +63,46 @@ def fetch_actuals(
             "end_date": end_date,
         },
     )
+
+
+def update_db(session: Session, weather_list: list[dict], tenant_id: str, source: str):
+    for data in weather_list:
+        stmt = insert(WeatherObservation).values(
+            tenant_id=tenant_id,
+            observation_date=data["observation_date"],
+            source=source,
+            max_temp_c=data["max_temp_c"],
+            min_temp_c=data["min_temp_c"],
+            precipitation_mm=data["precipitation_mm"],
+        )
+        stmt = stmt.on_conflict_do_update(
+            constraint="weather_observations_tenant_date_source_key",
+            set_={
+                "max_temp_c": stmt.excluded.max_temp_c,
+                "min_temp_c": stmt.excluded.min_temp_c,
+                "precipitation_mm": stmt.excluded.precipitation_mm,
+                "fetched_at": func.now(),
+            },
+        )
+        session.execute(stmt)
+    session.commit()
+
+
+def collect_weather():
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    with SessionLocal() as session:
+        tenants = session.scalars(
+            select(Tenant).where(
+                Tenant.latitude.is_not(None),
+                Tenant.longitude.is_not(None),
+            )
+        ).all()
+
+        for tenant in tenants:
+            forecasts = fetch_forecast(float(tenant.latitude), float(tenant.longitude))
+            update_db(session, forecasts, tenant.id, "forecast")
+
+            actuals = fetch_actuals(
+                float(tenant.latitude), float(tenant.longitude), yesterday, yesterday
+            )
+            update_db(session, actuals, tenant.id, "actual")
