@@ -4,3 +4,4 @@ from src.db.models.catalog import CatalogItem, CatalogModifier, BOMLine, Mapping
 from src.db.models.inventory import InventoryItem, InventoryTransaction
 from src.db.models.comms import EmailOutbox
 from src.db.models.weather import WeatherObservation
+from src.db.models.counts import PhysicalCount, CountLine

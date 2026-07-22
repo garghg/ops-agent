@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from src.schemas.tenant import ShopType
 from src.db.models import Tenant
 from tzlocal import get_localzone
+from src.services.weather_service import geocode
 
 
 def slugify(name: str, location: str, session: Session) -> str:
@@ -30,14 +31,20 @@ def create_tenant(
     session: Session,
     template_id: str,
     timezone: str | None = None,
+    latitude: float | None = None,
+    longitude: float | None = None,
 ) -> Tenant:
+    if latitude is None or longitude is None:
+        longitude, latitude, _ = geocode(location)
     tenant = Tenant(
         name=name,
         location=location,
         slug=slugify(name, location, session),
         timezone=timezone or get_system_timezone(),
         shop_type=shop_type.value,
-        template_id=template_id
+        template_id=template_id,
+        longitude=longitude,
+        latitude=latitude
     )
     session.add(tenant)
     return tenant
