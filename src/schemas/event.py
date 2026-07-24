@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 class EventCategory(str, Enum):
     INVENTORY = "inventory"
     PROCUREMENT = "procurement"

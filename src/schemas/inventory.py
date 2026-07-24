@@ -10,6 +10,12 @@ class InventoryTransactionType(str, Enum):
     ADJUSTMENT_ADD = "adjustment_add"
     ADJUSTMENT_SUB = "adjustment_sub"
 
+SUBTRACT_TYPES = {
+    InventoryTransactionType.USAGE,
+    InventoryTransactionType.WASTE,
+    InventoryTransactionType.ADJUSTMENT_SUB,
+}
+
 class ThresholdCrossedPayload(BaseModel):
     item_id: UUID
     quantity_on_hand: Decimal

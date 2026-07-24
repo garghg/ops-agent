@@ -6,15 +6,9 @@ from src.config import CLAIM_INTERVAL_SECONDS
 from src.events.bus import claim_pending_events, read_event, r
 from src.db.session import SessionLocal
 from src.db.models import InventoryItem, InventoryTransaction
-from src.schemas.inventory import InventoryEventPayload, InventoryTransactionType
+from src.schemas.inventory import InventoryEventPayload, SUBTRACT_TYPES
 from src.schemas.event import ConsumerGroup, EventCategory
 from src.consumers.utils import CONSUMER_NAME
-
-SUBTRACT_TYPES = {
-    InventoryTransactionType.USAGE,
-    InventoryTransactionType.WASTE,
-    InventoryTransactionType.ADJUSTMENT_SUB,
-}
 
 INVENTORY_STREAM = f"{EventCategory.INVENTORY.value}_events"
 
