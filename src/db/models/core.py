@@ -1,20 +1,21 @@
-from src.db.models.base import Base
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     CheckConstraint,
     ForeignKey,
-    Text,
     Integer,
     Numeric,
+    Text,
     text,
 )
-from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID, JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
+
+from src.db.models.base import Base
 from src.schemas.tenant import ShopType
-from decimal import Decimal
 
 
 class Template(Base):
