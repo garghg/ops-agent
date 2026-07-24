@@ -40,6 +40,7 @@ class InventoryItem(Base):
         nullable=False,
     )
     unit: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class InventoryTransaction(Base):

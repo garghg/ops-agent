@@ -29,6 +29,7 @@ SEED_ITEMS = [
         supplier="Dairy Farms Co-op",
         shelf_life_days=21,
         unit="kg",
+        category="ice_cream",
     ),
     dict(
         name="Chocolate Ice Cream",
@@ -39,6 +40,7 @@ SEED_ITEMS = [
         supplier="Dairy Farms Co-op",
         shelf_life_days=21,
         unit="kg",
+        category="ice_cream",
     ),
     dict(
         name="Strawberry Ice Cream",
@@ -49,6 +51,7 @@ SEED_ITEMS = [
         supplier="Dairy Farms Co-op",
         shelf_life_days=14,
         unit="kg",
+        category="ice_cream",
     ),
     dict(
         name="Waffle Cones",
@@ -59,6 +62,7 @@ SEED_ITEMS = [
         supplier="Sunrise Bakery Supply",
         shelf_life_days=90,
         unit="count",
+        category="cones",
     ),
     dict(
         name="Cake Cones",
@@ -69,6 +73,7 @@ SEED_ITEMS = [
         supplier="Sunrise Bakery Supply",
         shelf_life_days=120,
         unit="count",
+        category="cones",
     ),
     dict(
         name="Rainbow Sprinkles",
@@ -79,6 +84,7 @@ SEED_ITEMS = [
         supplier="Sweet Toppings Inc",
         shelf_life_days=365,
         unit="kg",
+        category="toppings",
     ),
     dict(
         name="Hot Fudge Sauce",
@@ -89,6 +95,7 @@ SEED_ITEMS = [
         supplier="Sweet Toppings Inc",
         shelf_life_days=180,
         unit="kg",
+        category="toppings",
     ),
     dict(
         name="Caramel Sauce",
@@ -99,6 +106,7 @@ SEED_ITEMS = [
         supplier="Sweet Toppings Inc",
         shelf_life_days=180,
         unit="kg",
+        category="toppings",
     ),
     dict(
         name="Whipped Cream",
@@ -109,6 +117,7 @@ SEED_ITEMS = [
         supplier="Dairy Farms Co-op",
         shelf_life_days=10,
         unit="kg",
+        category="toppings",
     ),
     dict(
         name="Maraschino Cherries",
@@ -119,6 +128,7 @@ SEED_ITEMS = [
         supplier="Sweet Toppings Inc",
         shelf_life_days=270,
         unit="count",
+        category="toppings",
     ),
     dict(
         name="Paper Cups",
@@ -129,6 +139,7 @@ SEED_ITEMS = [
         supplier="Sunrise Bakery Supply",
         shelf_life_days=None,
         unit="count",
+        category="supplies",
     ),
     dict(
         name="Plastic Spoons",
@@ -139,6 +150,7 @@ SEED_ITEMS = [
         supplier="Sunrise Bakery Supply",
         shelf_life_days=None,
         unit="count",
+        category="supplies",
     ),
     dict(
         name="Bowls",
@@ -149,9 +161,9 @@ SEED_ITEMS = [
         supplier="Sunrise Bakery Supply",
         shelf_life_days=None,
         unit="count",
+        category="supplies",
     ),
 ]
-
 # --- Catalog items (what customers buy) ---
 
 CATALOG_ITEMS = [
