@@ -1,4 +1,3 @@
-from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from src.schemas.inventory import SUBTRACT_TYPES
@@ -7,7 +6,7 @@ from src.db.models.inventory import InventoryItem, InventoryTransaction
 from src.db.models.shrinkage import ShrinkageRate
 
 
-def compute_shrinkage_rates(session: Session, physical_count_id):
+def compute_shrinkage_rates(session: Session, physical_count_id, tenant_id):
     discrepancy_stmt = (
         select(
             InventoryItem.category,
@@ -16,12 +15,17 @@ def compute_shrinkage_rates(session: Session, physical_count_id):
         .join(InventoryItem, CountLine.inventory_item_id == InventoryItem.id)
         .where(CountLine.physical_count_id == physical_count_id)
         .where(CountLine.discrepancy < 0)
+        .where(InventoryItem.tenant_id == tenant_id)
         .group_by(InventoryItem.category)
     )
 
     discrepancies = session.execute(discrepancy_stmt).all()
 
-    current_count = session.get(PhysicalCount, physical_count_id)
+    current_count = session.scalar(
+        select(PhysicalCount)
+        .where(PhysicalCount.id == physical_count_id)
+        .where(PhysicalCount.tenant_id == tenant_id)
+    )
 
     prev_stmt = (
         select(PhysicalCount)

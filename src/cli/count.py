@@ -70,7 +70,7 @@ def enter():
             )
             entry["item"].quantity_on_hand = entry["actual"]
 
-        compute_shrinkage_rates(session, count.id)
+        compute_shrinkage_rates(session, count.id, tenant.id)
         session.commit()
 
         table = Table(title=f"Count Summary — {len(counted_items)} items")
