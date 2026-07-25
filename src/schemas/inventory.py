@@ -1,7 +1,9 @@
-from enum import Enum
-from pydantic import BaseModel
-from uuid import UUID
 from decimal import Decimal
+from enum import Enum
+from uuid import UUID
+
+from pydantic import BaseModel
+
 
 class InventoryTransactionType(str, Enum):
     RESTOCK = "restock"
@@ -15,12 +17,6 @@ SUBTRACT_TYPES = {
     InventoryTransactionType.WASTE,
     InventoryTransactionType.ADJUSTMENT_SUB,
 }
-
-class ThresholdCrossedPayload(BaseModel):
-    item_id: UUID
-    quantity_on_hand: Decimal
-    reorder_point: Decimal
-    reorder_quantity: Decimal
 
 class InventoryEventPayload(BaseModel):
     item_id: UUID

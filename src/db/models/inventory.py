@@ -1,6 +1,6 @@
-from src.db.models.base import Base
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     CheckConstraint,
@@ -12,8 +12,10 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
+
+from src.db.models.base import Base
 from src.schemas.inventory import InventoryTransactionType
-from decimal import Decimal
+
 
 class InventoryItem(Base):
     __tablename__ = "inventory_items"
@@ -26,9 +28,8 @@ class InventoryItem(Base):
         Numeric(10, 2), nullable=False, server_default="0"
     )
     reorder_point: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-    reorder_quantity: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    target_quantity: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     cost_per_unit: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-    supplier: Mapped[str | None] = mapped_column(Text)
     shelf_life_days: Mapped[int | None] = mapped_column()
     last_restocked_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
