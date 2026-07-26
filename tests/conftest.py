@@ -1,13 +1,18 @@
 import os
+
 from dotenv import load_dotenv
+
 load_dotenv()
 os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL", os.environ["DATABASE_URL"])
-import pytest  # noqa: E402
-from src.db.session import SessionLocal  # noqa: E402
-from src.db.models import Base  # noqa: E402
-from src.events.bus import r  # noqa: E402
-from src.db.session import engine  # noqa: E402
-from scripts.seed import seed  # noqa: E402
+import pytest  # noqa: E402, RUF100
+
+from scripts.seed import seed  # noqa: E402, RUF100
+from src.db.models import Base  # noqa: E402, RUF100
+from src.db.session import (
+    SessionLocal,  # noqa: E402, RUF100
+    engine,  # noqa: E402, RUF100
+)
+from src.events.bus import r  # noqa: E402, RUF100
 
 
 @pytest.fixture(scope="session")

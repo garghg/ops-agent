@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
+
 from sqlalchemy import select
+
 from src.db.models.core import Tenant
 from src.db.session import SessionLocal
 

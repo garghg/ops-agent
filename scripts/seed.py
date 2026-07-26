@@ -364,6 +364,8 @@ def seed() -> None:
             session=session,
             template_id=template.id,
             address="123 Main St.",
+            latitude=49.2827,
+            longitude=-123.1207,
         )
         session.flush()
 

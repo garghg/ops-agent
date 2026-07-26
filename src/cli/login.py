@@ -1,10 +1,11 @@
-from rich.prompt import Prompt
-from sqlalchemy import select
 import typer
 from rich.console import Console
+from rich.prompt import Prompt
+from sqlalchemy import select
+
+from src.cli.context import clear_context, save_context
 from src.db.models.core import Tenant
 from src.db.session import SessionLocal
-from src.cli.context import save_context, clear_context
 
 app = typer.Typer()
 console = Console()

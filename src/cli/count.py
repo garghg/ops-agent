@@ -1,13 +1,15 @@
-from sqlalchemy import select
+from decimal import Decimal
+
 import typer
 from rich.console import Console
-from rich.table import Table
 from rich.prompt import Prompt
+from rich.table import Table
+from sqlalchemy import select
+
 from src.cli.context import get_tenant
+from src.db.models.counts import CountLine, PhysicalCount
 from src.db.models.inventory import InventoryItem
-from src.db.models.counts import PhysicalCount, CountLine
 from src.services.shrinkage_service import compute_shrinkage_rates
-from decimal import Decimal
 
 app = typer.Typer()
 console = Console()

@@ -1,6 +1,8 @@
-from unittest.mock import patch, MagicMock
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
+
 from sqlalchemy import select
+
 from src.db.models import Tenant, WeatherObservation
 from src.services.weather_service import collect_weather
 
