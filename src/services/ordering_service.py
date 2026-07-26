@@ -14,6 +14,7 @@ from src.db.models.suppliers import (
     Supplier,
     SupplierItem,
 )
+from src.schemas.orders import OrderBy
 from src.schemas.suppliers import POStatus
 
 
@@ -23,6 +24,7 @@ def generate_proposals(session: Session, tenant_id, item_ids: list[str]) -> list
         .join(PurchaseOrder, POLine.purchase_order_id == PurchaseOrder.id)
         .where(PurchaseOrder.status.in_([POStatus.PROPOSED, POStatus.APPROVED]))
         .where(POLine.tenant_id == tenant_id)
+        .where(PurchaseOrder.created_by == OrderBy.SYSTEM.value)
     ).all()
 
     existing_proposed = []
@@ -65,7 +67,9 @@ def generate_proposals(session: Session, tenant_id, item_ids: list[str]) -> list
 
     supplier_ids = {si.supplier_id for si in supplier_items}
     suppliers = session.scalars(
-        select(Supplier).where(Supplier.id.in_(supplier_ids))
+        select(Supplier)
+        .where(Supplier.id.in_(supplier_ids))
+        .where(Supplier.tenant_id == tenant_id)
     ).all()
     supplier_map = {s.id: s for s in suppliers}
 
@@ -96,6 +100,7 @@ def generate_proposals(session: Session, tenant_id, item_ids: list[str]) -> list
                 supplier_id=supplier_id,
                 status=POStatus.PROPOSED.value,
                 total_value=Decimal(0),
+                created_by=OrderBy.SYSTEM.value,
             )
             session.add(po)
             session.flush()
@@ -140,7 +145,7 @@ def generate_proposals(session: Session, tenant_id, item_ids: list[str]) -> list
                 purchase_order_id=po.id,
                 from_status=None if is_new else POStatus.PROPOSED.value,
                 to_status=POStatus.PROPOSED.value,
-                changed_by="system",
+                changed_by=OrderBy.SYSTEM.value,
                 note="Auto-generated proposal"
                 if is_new
                 else "Proposal updated with current quantities",

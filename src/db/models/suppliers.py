@@ -17,6 +17,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+from src.schemas.orders import OrderBy
 from src.schemas.suppliers import POStatus
 
 from .base import Base
@@ -99,6 +100,10 @@ class PurchaseOrder(Base):
             f"status IN ({', '.join(repr(t.value) for t in POStatus)})",
             name="purchase_orders_status_check",
         ),
+        CheckConstraint(
+            f"created_by IN ({', '.join(repr(t.value) for t in OrderBy)})",
+            name="purchase_orders_created_by_check",
+        ),
     )
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
@@ -120,13 +125,19 @@ class PurchaseOrder(Base):
     ordered_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
     expected_delivery: Mapped[date | None] = mapped_column(Date)
     actual_delivery: Mapped[date | None] = mapped_column(Date)
-    suggested_topups: Mapped[list[dict] | None] = mapped_column(JSONB,nullable=True)
+    suggested_topups: Mapped[list[dict] | None] = mapped_column(JSONB, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=f"{OrderBy.SYSTEM}"
+    )
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
 
