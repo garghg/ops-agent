@@ -1,19 +1,16 @@
-from src.clock import get_now
 from zoneinfo import ZoneInfo
 
-from apscheduler.schedulers.blocking import BlockingScheduler
-from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy import select
 
+from src.clock import get_now
 from src.db.models import Tenant
 from src.db.session import SessionLocal
 from src.events.bus import publish_event
+from src.logging import get_logger
 from src.schemas.event import EventCategory, SystemEventType, WorkforceEventType
 from src.services.config_services import resolve_config
-from src.logging import setup_logging, get_logger
 
-scheduler = BlockingScheduler()
-log = get_logger("cron_scheduler")
+log = get_logger("shop_times")
 
 
 def poll_shop_times() -> None:
@@ -69,10 +66,3 @@ def poll_shop_times() -> None:
                     {},
                     tenant_id=str(tenant.id),
                 )
-
-
-scheduler.add_job(poll_shop_times, CronTrigger(minute="*"))
-
-if __name__ == "__main__":
-    setup_logging()
-    scheduler.start()
