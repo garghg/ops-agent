@@ -1,19 +1,22 @@
 import uuid
 from datetime import datetime
-from src.db.models.base import Base
+
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     ForeignKey,
-    Text,
     Integer,
+    Text,
     UniqueConstraint,
-    Boolean,
     text,
 )
 from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
+
+from src.db.models.base import Base
 from src.schemas.email import EmailStatus
+
 
 class EmailOutbox(Base):
     __tablename__ = "email_outbox"
