@@ -1,0 +1,11 @@
+<h1>Purchase Order for {{ supplier_name }}</h1>
+<table>
+  {% for line in lines %}
+  <tr>
+    <td>{{ line.item_name }}</td>
+    <td>{{ line.quantity }}</td>
+  </tr>
+  {% endfor %}
+  {{ tenant.name }}
+  {{ tenant.address }}, {{ tenant.location }}
+</table>

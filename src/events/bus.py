@@ -1,7 +1,9 @@
-import os
 import json
+import os
+
 import redis
 from dotenv import load_dotenv
+
 from src.schemas.event import EventCategory
 
 load_dotenv()

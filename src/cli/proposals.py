@@ -10,6 +10,8 @@ from sqlalchemy import select
 from src.cli.context import get_tenant
 from src.db.models.inventory import InventoryItem
 from src.db.models.suppliers import POEvent, POLine, PurchaseOrder, Supplier
+from src.events.bus import publish_event
+from src.schemas.event import EventCategory, ProcurementEventType
 from src.schemas.suppliers import POStatus
 
 app = typer.Typer()
@@ -168,6 +170,13 @@ def approve(po_id: str):
     )
 
     session.commit()
+    publish_event(
+        EventCategory.PROCUREMENT,
+        ProcurementEventType.PO_APPROVED.value,
+        "2",
+        {"purchase_order_id": str(po.id)},
+        str(tenant.id)
+    )
     console.print("[green]✓ Purchase order approved.[/green]")
 
 
@@ -320,29 +329,35 @@ def edit(po_id: str):
 
     if not remaining_lines:
         po.status = POStatus.CANCELLED.value
-        session.add(POEvent(
-            tenant_id=tenant.id,
-            purchase_order_id=po.id,
-            from_status=POStatus.PROPOSED.value,
-            to_status=POStatus.CANCELLED.value,
-            changed_by="owner",
-            note="All lines removed during edit",
-        ))
+        session.add(
+            POEvent(
+                tenant_id=tenant.id,
+                purchase_order_id=po.id,
+                from_status=POStatus.PROPOSED.value,
+                to_status=POStatus.CANCELLED.value,
+                changed_by="owner",
+                note="All lines removed during edit",
+            )
+        )
         session.commit()
         console.print("[yellow]All lines removed — order cancelled.[/yellow]")
         return
 
     po.total_value = sum(l.quantity_ordered * l.unit_cost for l in remaining_lines)
 
-    session.add(POEvent(
-        tenant_id=tenant.id,
-        purchase_order_id=po.id,
-        from_status=POStatus.PROPOSED.value,
-        to_status=POStatus.PROPOSED.value,
-        changed_by="owner",
-        note=f"Edited via CLI: {edits}",
-    ))
-    
+    session.add(
+        POEvent(
+            tenant_id=tenant.id,
+            purchase_order_id=po.id,
+            from_status=POStatus.PROPOSED.value,
+            to_status=POStatus.PROPOSED.value,
+            changed_by="owner",
+            note=f"Edited via CLI: {edits}",
+        )
+    )
+
     po.suggested_topups = None
     session.commit()
-    console.print(f"[green]✓ Purchase order updated. New total: ${po.total_value:.2f}[/green]")
+    console.print(
+        f"[green]✓ Purchase order updated. New total: ${po.total_value:.2f}[/green]"
+    )

@@ -1,15 +1,17 @@
 import time
+
 import redis
 from sqlalchemy import select
-from src.logging import setup_logging, get_logger
+
 from src.config import CLAIM_INTERVAL_SECONDS
 from src.consumers.utils import CONSUMER_NAME
-from src.schemas.inventory import InventoryEventPayload, InventoryTransactionType
 from src.db.models import BOMLine, CatalogItem, CatalogModifier, MappingGap
-from src.schemas.sale import SaleEvent
-from src.schemas.event import ConsumerGroup, EventCategory, InventoryEventType
-from src.events.bus import claim_pending_events, publish_event, r, read_event
 from src.db.session import SessionLocal
+from src.events.bus import claim_pending_events, publish_event, r, read_event
+from src.logging import get_logger, setup_logging
+from src.schemas.event import ConsumerGroup, EventCategory, InventoryEventType
+from src.schemas.inventory import InventoryEventPayload, InventoryTransactionType
+from src.schemas.sale import SaleEvent
 
 SALES_STREAM = f"{EventCategory.SALES.value}_events"
 log = get_logger(__name__)
@@ -20,7 +22,7 @@ def process_events(events: list[dict]) -> None:
         try:
             sale = SaleEvent(**event["payload"])
             tenant_id = event["tenant_id"]
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"Bad payload, dropping event {event['id']}: {e}")
             r.xack(SALES_STREAM, ConsumerGroup.BOM_CONSUMER.value, event["id"])
             continue
@@ -139,7 +141,7 @@ def process_events(events: list[dict]) -> None:
                             str(tenant_id),
                         )
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"Error processing event {event['id']}: {e}")
             r.xack(SALES_STREAM, ConsumerGroup.BOM_CONSUMER.value, event["id"])
             continue

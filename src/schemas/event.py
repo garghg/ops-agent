@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class EventCategory(str, Enum):
     INVENTORY = "inventory"
     PROCUREMENT = "procurement"
@@ -25,8 +26,13 @@ class ConsumerGroup(str, Enum):
     STOCK_UPDATER = "stock_updater"
     BOM_CONSUMER = "bom_consumer"
     WEATHER_CONSUMER = "weather_consumer"
+    EMAIL_CONSUMER = "email_consumer"
 
 
 class InventoryEventType(str, Enum):
     BELOW_REORDER_POINT = "below_reorder_point"
     BOM_DEPLETION = "bom_depletion"
+
+
+class ProcurementEventType(str, Enum):
+    PO_APPROVED = "po_approved"
