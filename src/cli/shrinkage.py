@@ -32,7 +32,7 @@ def report(tenant_name: str):
             console.print("[yellow]No shrinkage data yet. Run at least two counts.[/yellow]")
             return
 
-        table = Table(title=f"Shrinkage Rates — {tenant.name}")
+        table = Table(title=f"Shrinkage Rates -- {tenant.name}")
         table.add_column("Category")
         table.add_column("Rate", justify="right")
         table.add_column("Samples", justify="right")

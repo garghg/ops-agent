@@ -2,6 +2,7 @@ import typer
 
 from src.cli.count import app as count_app
 from src.cli.login import login, logout
+from src.cli.proposals import app as proposals_app
 from src.cli.shrinkage import app as shrinkage_app
 
 app = typer.Typer()
@@ -9,3 +10,4 @@ app.add_typer(count_app, name="count")
 app.add_typer(shrinkage_app, name="shrinkage")
 app.command()(login)
 app.command()(logout)
+app.add_typer(proposals_app, name="proposals")

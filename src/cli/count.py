@@ -75,7 +75,7 @@ def enter():
         compute_shrinkage_rates(session, count.id, tenant.id)
         session.commit()
 
-        table = Table(title=f"Count Summary — {len(counted_items)} items")
+        table = Table(title=f"Count Summary -- {len(counted_items)} items")
         table.add_column("Item")
         table.add_column("Expected", justify="right")
         table.add_column("Actual", justify="right")
