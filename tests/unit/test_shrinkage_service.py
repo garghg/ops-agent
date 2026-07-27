@@ -1,12 +1,16 @@
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
 from sqlalchemy import select
 
 from src.db.models.core import Tenant
-from src.db.models.inventory import InventoryItem, InventoryTransaction, InventoryTransactionType
-from src.db.models.counts import PhysicalCount, CountLine
+from src.db.models.counts import CountLine, PhysicalCount
+from src.db.models.inventory import (
+    InventoryItem,
+    InventoryTransaction,
+    InventoryTransactionType,
+)
 from src.db.models.shrinkage import ShrinkageRate
 from src.services.shrinkage_service import compute_shrinkage_rates
 
@@ -73,7 +77,7 @@ def _add_depletions(session, item, qty, time):
 
 class TestFirstCount:
     def test_no_previous_count_returns_early(self, seeded_db, tenant, items):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         count = _make_count(seeded_db, tenant, items, now, {
             "ice_cream": Decimal("18.00"),
             "topping": Decimal("4.50"),
@@ -89,8 +93,8 @@ class TestFirstCount:
 
 class TestSecondCount:
     def test_computes_rate_from_discrepancy_and_depletions(self, seeded_db, tenant, items):
-        t1 = datetime.now(timezone.utc) - timedelta(days=7)
-        t2 = datetime.now(timezone.utc)
+        t1 = datetime.now(UTC) - timedelta(days=7)
+        t2 = datetime.now(UTC)
 
         _make_count(seeded_db, tenant, items, t1, {
             "ice_cream": Decimal("20.00"),
@@ -121,8 +125,8 @@ class TestSecondCount:
         assert rates["toppings"].sample_count == 1
 
     def test_no_negative_discrepancy_skips_category(self, seeded_db, tenant, items):
-        t1 = datetime.now(timezone.utc) - timedelta(days=7)
-        t2 = datetime.now(timezone.utc)
+        t1 = datetime.now(UTC) - timedelta(days=7)
+        t2 = datetime.now(UTC)
 
         _make_count(seeded_db, tenant, items, t1, {
             "ice_cream": Decimal("20.00"),
@@ -145,8 +149,8 @@ class TestSecondCount:
         assert len(rates) == 0
 
     def test_no_depletions_skips_category(self, seeded_db, tenant, items):
-        t1 = datetime.now(timezone.utc) - timedelta(days=7)
-        t2 = datetime.now(timezone.utc)
+        t1 = datetime.now(UTC) - timedelta(days=7)
+        t2 = datetime.now(UTC)
 
         _make_count(seeded_db, tenant, items, t1, {
             "ice_cream": Decimal("20.00"),
@@ -169,9 +173,9 @@ class TestSecondCount:
 
 class TestRunningAverage:
     def test_third_count_updates_average(self, seeded_db, tenant, items):
-        t1 = datetime.now(timezone.utc) - timedelta(days=14)
+        t1 = datetime.now(UTC) - timedelta(days=14)
         t2 = t1 + timedelta(days=7)
-        t3 = datetime.now(timezone.utc)
+        t3 = datetime.now(UTC)
 
         _make_count(seeded_db, tenant, items, t1, {
             "ice_cream": Decimal("20.00"),

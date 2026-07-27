@@ -1,9 +1,9 @@
 from decimal import Decimal
 from math import ceil
 
-from rich.prompt import Prompt
 import typer
 from rich.console import Console
+from rich.prompt import Prompt
 from rich.table import Table
 from sqlalchemy import select
 
