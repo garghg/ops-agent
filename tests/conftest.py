@@ -17,6 +17,7 @@ from src.events.bus import r  # noqa: E402, RUF100
 
 @pytest.fixture(scope="session")
 def setup_db():
+    Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     yield
     Base.metadata.drop_all(engine)
