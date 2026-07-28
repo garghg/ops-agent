@@ -2,7 +2,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 
-from src.clock import get_now
+from scheduler.clock import get_now
 from src.db.models import Tenant
 from src.db.session import SessionLocal
 from src.events.bus import publish_event
