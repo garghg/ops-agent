@@ -1,8 +1,14 @@
 from datetime import datetime
 from decimal import Decimal
+from enum import Enum
 
 from pydantic import BaseModel
 
+
+class SaleTransactionType(str, Enum):
+    SALE = "sale"
+    VOID = "void"
+    REFUND = "refund"
 
 class SaleLineItem(BaseModel):
     item_name: str
@@ -18,3 +24,5 @@ class SaleEvent(BaseModel):
     line_items: list[SaleLineItem]
     total: Decimal
     payment_method: str
+    transaction_type: str = SaleTransactionType.SALE
+    discount_amount: Decimal = Decimal(0)

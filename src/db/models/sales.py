@@ -2,12 +2,13 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import ForeignKey, Numeric, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, ForeignKey, Numeric, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from src.db.models.base import Base
+from src.schemas.sale import SaleTransactionType
 
 
 class SaleTransaction(Base):
@@ -17,6 +18,10 @@ class SaleTransaction(Base):
             "tenant_id",
             "external_transaction_id",
             name="sale_transactions_tenant_id_external_transaction_id_key",
+        ),
+        CheckConstraint(
+            f"transaction_type IN ({', '.join(repr(t.value) for t in SaleTransactionType)})",
+            name="sale_transactions_transaction_type_check",
         ),
     )
 
@@ -37,6 +42,12 @@ class SaleTransaction(Base):
         UUID(as_uuid=True),
         ForeignKey("tenants.id", ondelete="RESTRICT"),
         nullable=False,
+    )
+    transaction_type: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default="sale"
+    )
+    discount_amount: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, server_default="0"
     )
 
 

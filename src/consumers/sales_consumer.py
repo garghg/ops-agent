@@ -33,6 +33,8 @@ def process_events(events: list[dict]):
                     timestamp=sales.timestamp,
                     total=sales.total,
                     payment_method=sales.payment_method,
+                    transaction_type=sales.transaction_type,
+                    discount_amount=sales.discount_amount,
                     tenant_id=tenant_id
                 )
                 
