@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from src.db.models.health import Heartbeat
+from src.db.models import Heartbeat
 
 
 def record_heartbeat(session: Session, consumer_name: str) -> None:

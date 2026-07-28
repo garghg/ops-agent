@@ -28,6 +28,7 @@ class ConsumerGroup(str, Enum):
     WEATHER_CONSUMER = "weather_consumer"
     EMAIL_CONSUMER = "email_consumer"
     SALES_CONSUMER = "sales_consumer"
+    SUMMARY_CONSUMER = "summary_consumer"
 
 
 class InventoryEventType(str, Enum):

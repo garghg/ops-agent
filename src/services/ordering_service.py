@@ -6,8 +6,8 @@ from math import ceil
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.db.models.inventory import InventoryItem
-from src.db.models.suppliers import (
+from src.db.models import (
+    InventoryItem,
     POEvent,
     POLine,
     PurchaseOrder,

@@ -3,7 +3,7 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from src.db.models.core import Tenant
+from src.db.models import Tenant
 from src.db.session import SessionLocal
 
 CONTEXT_FILE = Path.home() / ".ops_context"

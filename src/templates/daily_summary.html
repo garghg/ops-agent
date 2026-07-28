@@ -1,0 +1,49 @@
+<h1>Daily Summary — {{ tenant.name }}</h1>
+<p>{{ business_date }}</p>
+
+<h2>Sales</h2>
+<table>
+  <tr><td>Transactions</td><td>{{ sales.transaction_count }}</td></tr>
+  <tr><td>Revenue</td><td>${{ "%.2f"|format(sales.revenue) }}</td></tr>
+  <tr><td>Discounts</td><td>${{ "%.2f"|format(sales.total_discounts) }}</td></tr>
+  <tr><td>Voids</td><td>{{ sales.void_count }}</td></tr>
+  <tr><td>Refunds</td><td>{{ sales.refund_count }}</td></tr>
+</table>
+
+<h2>Low Inventory</h2>
+{% if low_inventory %}
+<table>
+  <tr><th>Item</th><th>On Hand</th><th>Reorder Point</th></tr>
+  {% for item in low_inventory %}
+  <tr>
+    <td>{{ item.name }}</td>
+    <td>{{ item.quantity_on_hand }}</td>
+    <td>{{ item.reorder_point }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>All items above reorder point.</p>
+{% endif %}
+
+<h2>Pending Proposals</h2>
+{% if pending_proposals %}
+<table>
+  <tr><th>Supplier</th><th>Total Value</th></tr>
+  {% for po, supplier in pending_proposals %}
+  <tr>
+    <td>{{ supplier.name }}</td>
+    <td>${{ "%.2f"|format(po.total_value) }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>No pending proposals.</p>
+{% endif %}
+
+<h2>System Health</h2>
+{% if stale_consumers %}
+<p>Stale consumers: {{ stale_consumers | join(", ") }}</p>
+{% else %}
+<p>All systems operational.</p>
+{% endif %}

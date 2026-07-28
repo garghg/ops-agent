@@ -4,9 +4,7 @@ import pytest
 from sqlalchemy import select
 
 from src.adapters.email.dry_run import DryRunSender
-from src.db.models.comms import EmailOutbox
-from src.db.models.core import Tenant
-from src.db.models.health import Heartbeat
+from src.db.models import EmailOutbox, Heartbeat, Tenant
 from src.schemas.email import EmailStatus
 from src.services.email_service import process_outbox
 from src.services.health_service import check_heartbeats, record_heartbeat

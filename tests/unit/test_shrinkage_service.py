@@ -4,14 +4,15 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
-from src.db.models.core import Tenant
-from src.db.models.counts import CountLine, PhysicalCount
-from src.db.models.inventory import (
+from src.db.models import (
+    CountLine,
     InventoryItem,
     InventoryTransaction,
     InventoryTransactionType,
+    PhysicalCount,
+    ShrinkageRate,
+    Tenant,
 )
-from src.db.models.shrinkage import ShrinkageRate
 from src.services.shrinkage_service import compute_shrinkage_rates
 
 

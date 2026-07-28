@@ -3,8 +3,7 @@ from rich.console import Console
 from rich.table import Table
 from sqlalchemy import select
 
-from src.db.models.core import Tenant
-from src.db.models.shrinkage import ShrinkageRate
+from src.db.models import ShrinkageRate, Tenant
 from src.db.session import SessionLocal
 
 app = typer.Typer()

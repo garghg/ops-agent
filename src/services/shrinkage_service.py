@@ -1,9 +1,14 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+
+from src.db.models import (
+    CountLine,
+    InventoryItem,
+    InventoryTransaction,
+    PhysicalCount,
+    ShrinkageRate,
+)
 from src.schemas.inventory import SUBTRACT_TYPES
-from src.db.models.counts import PhysicalCount, CountLine
-from src.db.models.inventory import InventoryItem, InventoryTransaction
-from src.db.models.shrinkage import ShrinkageRate
 
 
 def compute_shrinkage_rates(session: Session, physical_count_id, tenant_id):

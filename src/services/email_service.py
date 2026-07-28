@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.adapters import SenderAdapter
-from src.db.models.comms import EmailOutbox
+from src.db.models import EmailOutbox
 from src.schemas.email import EmailStatus
 
 

@@ -4,9 +4,7 @@ from sqlalchemy import select
 
 from src.adapters.email.dry_run import DryRunSender
 from src.consumers.email_consumer import process_events
-from src.db.models.comms import EmailOutbox
-from src.db.models.core import Tenant
-from src.db.models.inventory import InventoryItem
+from src.db.models import EmailOutbox, InventoryItem, Tenant
 from src.schemas.email import EmailStatus
 from src.schemas.suppliers import POStatus
 from src.services.email_service import process_outbox

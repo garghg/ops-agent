@@ -3,12 +3,12 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
-from src.db.models.core import Tenant
-from src.db.models.inventory import InventoryItem
-from src.db.models.suppliers import (
+from src.db.models import (
+    InventoryItem,
     POEvent,
     POLine,
     Supplier,
+    Tenant,
 )
 from src.schemas.suppliers import POStatus
 from src.services.ordering_service import generate_proposals

@@ -4,7 +4,7 @@ from rich.prompt import Prompt
 from sqlalchemy import select
 
 from src.cli.context import clear_context, save_context
-from src.db.models.core import Tenant
+from src.db.models import Tenant
 from src.db.session import SessionLocal
 
 app = typer.Typer()

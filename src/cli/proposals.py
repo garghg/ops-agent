@@ -8,8 +8,7 @@ from rich.table import Table
 from sqlalchemy import select
 
 from src.cli.context import get_tenant
-from src.db.models.inventory import InventoryItem
-from src.db.models.suppliers import POEvent, POLine, PurchaseOrder, Supplier
+from src.db.models import InventoryItem, POEvent, POLine, PurchaseOrder, Supplier
 from src.events.bus import publish_event
 from src.schemas.event import EventCategory, ProcurementEventType
 from src.schemas.suppliers import POStatus

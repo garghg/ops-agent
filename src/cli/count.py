@@ -7,8 +7,7 @@ from rich.table import Table
 from sqlalchemy import select
 
 from src.cli.context import get_tenant
-from src.db.models.counts import CountLine, PhysicalCount
-from src.db.models.inventory import InventoryItem
+from src.db.models import CountLine, InventoryItem, PhysicalCount
 from src.services.shrinkage_service import compute_shrinkage_rates
 
 app = typer.Typer()

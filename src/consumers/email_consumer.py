@@ -7,10 +7,14 @@ from sqlalchemy import select
 
 from src.config import CLAIM_INTERVAL_SECONDS
 from src.consumers.utils import CONSUMER_NAME
-from src.db.models.comms import EmailOutbox
-from src.db.models.core import Tenant
-from src.db.models.inventory import InventoryItem
-from src.db.models.suppliers import POLine, PurchaseOrder, Supplier
+from src.db.models import (
+    EmailOutbox,
+    InventoryItem,
+    POLine,
+    PurchaseOrder,
+    Supplier,
+    Tenant,
+)
 from src.db.session import SessionLocal
 from src.events.bus import claim_pending_events, r, read_event
 from src.logging import get_logger, setup_logging
