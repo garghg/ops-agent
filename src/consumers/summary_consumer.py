@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 import redis
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from src.config import CLAIM_INTERVAL_SECONDS
 from src.consumers.utils import CONSUMER_NAME
@@ -105,7 +106,7 @@ def process_events(events: list[dict]):
                 
                 stale = check_heartbeats(session)
                 
-                config = resolve_config(session, tenant.id)
+                config = resolve_config(str(tenant.id), session)
                 alerts = check_financial_alerts(sales_summary, config.alerts)
 
                 html = template.render(
@@ -114,7 +115,8 @@ def process_events(events: list[dict]):
                     sales=sales_summary,
                     low_inventory=low_inventory,
                     pending_proposals=pending_proposals,
-                    stale_consumers=stale
+                    stale_consumers=stale,
+                    alerts=alerts,
                 )
                 
                 session.add(EmailOutbox(
@@ -124,10 +126,12 @@ def process_events(events: list[dict]):
                     subject=f"Daily Summary for {tenant.name}",
                     body_html=html,
                     status=EmailStatus.PENDING.value,
-                    alerts=alerts,
                 ))
                 session.commit()
                 
+        except IntegrityError:
+            session.rollback()
+            log.info("duplicate_summary", tenant_id=str(tenant_id), business_date=str(business_date))
         except Exception as e:  # noqa: BLE001
             print(f"Error processing event {event['id']}: {e}")
             r.xack(SYSTEM_STREAM, ConsumerGroup.SUMMARY_CONSUMER.value, event["id"])
