@@ -41,6 +41,17 @@
 <p>No pending proposals.</p>
 {% endif %}
 
+<h2>Alerts</h2>
+{% if alerts %}
+<ul>
+  {% for alert in alerts %}
+  <li>{{ alert }}</li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>No alerts.</p>
+{% endif %}
+
 <h2>System Health</h2>
 {% if stale_consumers %}
 <p>Stale consumers: {{ stale_consumers | join(", ") }}</p>

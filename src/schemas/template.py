@@ -12,6 +12,12 @@ class ScheduleConfig(BaseModel):
     poll_interval_seconds: int = 10800
 
 
+class AlertThresholds(BaseModel):
+    void_rate: float = 0.05
+    refund_rate: float = 0.05
+    discount_rate: float = 0.10
+
 class TemplateConfig(BaseModel):
     schedule: ScheduleConfig = ScheduleConfig()
+    alerts: AlertThresholds = AlertThresholds()
     model_config = ConfigDict(extra="forbid")

@@ -25,6 +25,8 @@ from src.schemas.email import EmailStatus
 from src.schemas.event import ConsumerGroup, EventCategory, SystemEventType
 from src.schemas.sale import SaleTransactionType
 from src.schemas.suppliers import POStatus
+from src.services.alert_service import check_financial_alerts
+from src.services.config_services import resolve_config
 from src.services.health_service import check_heartbeats, record_heartbeat
 
 SYSTEM_STREAM = f"{EventCategory.SYSTEM.value}_events"
@@ -102,6 +104,9 @@ def process_events(events: list[dict]):
                 ).all()
                 
                 stale = check_heartbeats(session)
+                
+                config = resolve_config(session, tenant.id)
+                alerts = check_financial_alerts(sales_summary, config.alerts)
 
                 html = template.render(
                     tenant=tenant,
@@ -119,6 +124,7 @@ def process_events(events: list[dict]):
                     subject=f"Daily Summary for {tenant.name}",
                     body_html=html,
                     status=EmailStatus.PENDING.value,
+                    alerts=alerts,
                 ))
                 session.commit()
                 
