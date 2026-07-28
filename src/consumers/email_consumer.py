@@ -16,6 +16,7 @@ from src.events.bus import claim_pending_events, r, read_event
 from src.logging import get_logger, setup_logging
 from src.schemas.email import EmailStatus
 from src.schemas.event import ConsumerGroup, EventCategory
+from src.services.health_service import record_heartbeat
 
 EMAIL_STREAM = f"{EventCategory.PROCUREMENT.value}_events"
 log = get_logger(__name__)
@@ -110,6 +111,9 @@ def email_consumer():
                 CONSUMER_NAME
             )
             process_events(claimed_events)
+        
+        with SessionLocal() as session:
+            record_heartbeat(session, "email_consumer")
             
 if __name__ == "__main__":
     setup_logging()

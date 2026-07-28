@@ -1,10 +1,14 @@
-import redis
 import time
-from src.consumers.utils import CONSUMER_NAME
-from src.events.bus import read_event, r, claim_pending_events
-from src.schemas.event import ConsumerGroup, EventCategory, SystemEventType
-from src.services.weather_service import collect_weather
+
+import redis
+
 from src.config import CLAIM_INTERVAL_SECONDS
+from src.consumers.utils import CONSUMER_NAME
+from src.db.session import SessionLocal
+from src.events.bus import claim_pending_events, r, read_event
+from src.schemas.event import ConsumerGroup, EventCategory, SystemEventType
+from src.services.health_service import record_heartbeat
+from src.services.weather_service import collect_weather
 
 SYSTEM_STREAM = f"{EventCategory.SYSTEM.value}_events"
 
@@ -39,3 +43,6 @@ def weather_consumer():
                 CONSUMER_NAME,
             )
             listen_event(claimed)
+            
+        with SessionLocal() as session:
+            record_heartbeat(session, "weather_consumer")

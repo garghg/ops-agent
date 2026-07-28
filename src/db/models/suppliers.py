@@ -128,7 +128,7 @@ class PurchaseOrder(Base):
     suggested_topups: Mapped[list[dict] | None] = mapped_column(JSONB, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[str] = mapped_column(
-        Text, nullable=False, server_default=f"{OrderBy.SYSTEM}"
+        Text, nullable=False, server_default=OrderBy.SYSTEM.value
     )
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()

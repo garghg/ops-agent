@@ -7,3 +7,4 @@ from src.db.models.weather import WeatherObservation
 from src.db.models.counts import PhysicalCount, CountLine
 from src.db.models.shrinkage import ShrinkageRate
 from src.db.models.suppliers import Supplier, SupplierItem
+from src.db.models.health import Heartbeat

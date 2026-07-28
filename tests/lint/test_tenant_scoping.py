@@ -1,8 +1,10 @@
 import ast
-import pytest
-import src.db.models as models_module
-from sqlalchemy import inspect as sa_inspect
 from pathlib import Path
+
+import pytest
+from sqlalchemy import inspect as sa_inspect
+
+import src.db.models as models_module
 
 
 def tenant_scoped_model_names() -> set[str]:
@@ -15,7 +17,7 @@ def tenant_scoped_model_names() -> set[str]:
             continue
 
         mapper = sa_inspect(obj)
-        if "tenant_id" in mapper.columns.keys():
+        if "tenant_id" in mapper.columns.keys():  # noqa: SIM118
             scoped.add(name)
 
     return scoped
@@ -58,7 +60,7 @@ def enclosing_statement(tree: ast.AST, target: ast.AST) -> ast.stmt:
     for node in ast.walk(tree):
         if not isinstance(node, ast.stmt):
             continue
-        if any(n is target for n in ast.walk(node)):
+        if any(n is target for n in ast.walk(node)):  # noqa: SIM102
             if best is None or size(node) < size(best):
                 best = node
 

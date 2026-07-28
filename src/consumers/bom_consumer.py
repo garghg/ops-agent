@@ -12,6 +12,7 @@ from src.logging import get_logger, setup_logging
 from src.schemas.event import ConsumerGroup, EventCategory, InventoryEventType
 from src.schemas.inventory import InventoryEventPayload, InventoryTransactionType
 from src.schemas.sale import SaleEvent
+from src.services.health_service import record_heartbeat
 
 SALES_STREAM = f"{EventCategory.SALES.value}_events"
 log = get_logger(__name__)
@@ -173,6 +174,9 @@ def bom_consumer() -> None:
                 CONSUMER_NAME,
             )
             process_events(claimed_events)
+            
+        with SessionLocal() as session:
+            record_heartbeat(session, "bom_consumer")
 
 
 if __name__ == "__main__":

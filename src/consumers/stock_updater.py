@@ -1,14 +1,17 @@
 import time
+
 import redis
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+
 from src.config import CLAIM_INTERVAL_SECONDS
-from src.events.bus import claim_pending_events, read_event, r
-from src.db.session import SessionLocal
-from src.db.models import InventoryItem, InventoryTransaction
-from src.schemas.inventory import InventoryEventPayload, SUBTRACT_TYPES
-from src.schemas.event import ConsumerGroup, EventCategory
 from src.consumers.utils import CONSUMER_NAME
+from src.db.models import InventoryItem, InventoryTransaction
+from src.db.session import SessionLocal
+from src.events.bus import claim_pending_events, r, read_event
+from src.schemas.event import ConsumerGroup, EventCategory
+from src.schemas.inventory import SUBTRACT_TYPES, InventoryEventPayload
+from src.services.health_service import record_heartbeat
 
 INVENTORY_STREAM = f"{EventCategory.INVENTORY.value}_events"
 
@@ -24,33 +27,32 @@ def process_events(events: list[dict]) -> None:
             continue
 
         try:
-            with SessionLocal() as session:
-                with session.begin():
-                    item = session.scalar(
-                        select(InventoryItem).where(
-                            InventoryItem.id == payload.item_id,
-                            InventoryItem.tenant_id == tenant_id,
-                        )
+            with SessionLocal() as session, session.begin():
+                item = session.scalar(
+                    select(InventoryItem).where(
+                        InventoryItem.id == payload.item_id,
+                        InventoryItem.tenant_id == tenant_id,
                     )
-                    if item is None:
-                        raise ValueError(f"item_id {payload.item_id} not found")
+                )
+                if item is None:
+                    raise ValueError(f"item_id {payload.item_id} not found")
 
-                    magnitude = abs(payload.quantity)
-                    if payload.transaction_type in SUBTRACT_TYPES:
-                        item.quantity_on_hand -= magnitude
-                    else:
-                        item.quantity_on_hand += magnitude
+                magnitude = abs(payload.quantity)
+                if payload.transaction_type in SUBTRACT_TYPES:
+                    item.quantity_on_hand -= magnitude
+                else:
+                    item.quantity_on_hand += magnitude
 
-                    session.add(
-                        InventoryTransaction(
-                            item_id=payload.item_id,
-                            quantity_change=payload.quantity,
-                            transaction_type=payload.transaction_type,
-                            note=payload.note,
-                            event_id=event["id"],
-                            tenant_id=tenant_id
-                        )
+                session.add(
+                    InventoryTransaction(
+                        item_id=payload.item_id,
+                        quantity_change=payload.quantity,
+                        transaction_type=payload.transaction_type,
+                        note=payload.note,
+                        event_id=event["id"],
+                        tenant_id=tenant_id
                     )
+                )
         except ValueError as e:
             print(f"Skipping event {event['id']}: {e}")
             r.xack(INVENTORY_STREAM, ConsumerGroup.STOCK_UPDATER.value, event["id"])
@@ -69,11 +71,7 @@ def stock_updater() -> None:
 
     while True:
         try:
-            events = read_event(
-                EventCategory.INVENTORY,
-                ConsumerGroup.STOCK_UPDATER.value,
-                CONSUMER_NAME,
-            )
+            events = read_event(...)
         except redis.exceptions.TimeoutError:
             events = []
 
@@ -82,12 +80,11 @@ def stock_updater() -> None:
         now = time.monotonic()
         if now - last_claim_check >= CLAIM_INTERVAL_SECONDS:
             last_claim_check = now
-            claimed_events = claim_pending_events(
-                EventCategory.INVENTORY,
-                ConsumerGroup.STOCK_UPDATER.value,
-                CONSUMER_NAME,
-            )
+            claimed_events = claim_pending_events(...)
             process_events(claimed_events)
+
+        with SessionLocal() as session:
+            record_heartbeat(session, "stock_updater")
 
 
 if __name__ == "__main__":
