@@ -31,6 +31,7 @@ def create_tenant(
     shop_type: ShopType,
     session: Session,
     template_id: str,
+    owner_email: str | None,
     timezone: str | None = None,
     latitude: float | None = None,
     longitude: float | None = None,
@@ -46,7 +47,8 @@ def create_tenant(
         shop_type=shop_type.value,
         template_id=template_id,
         longitude=longitude,
-        latitude=latitude
+        latitude=latitude,
+        owner_email=owner_email
     )
     session.add(tenant)
     return tenant

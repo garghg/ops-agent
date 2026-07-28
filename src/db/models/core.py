@@ -77,4 +77,4 @@ class Tenant(Base):
     longitude: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=True)
     latitude: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=True)
     address: Mapped[str | None] = mapped_column(Text, nullable=False)
-    owner_email: Mapped[str] = mapped_column(Text, nullable=False)
+    owner_email: Mapped[str | None] = mapped_column(Text, nullable=True)

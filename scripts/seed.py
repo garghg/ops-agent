@@ -366,6 +366,7 @@ def seed() -> None:
             address="123 Main St.",
             latitude=49.2827,
             longitude=-123.1207,
+            owner_email="owner@devshop.com"
         )
         session.flush()
 

@@ -323,7 +323,9 @@ def edit(po_id: str):
         return
 
     remaining_lines = session.scalars(
-        select(POLine).where(POLine.purchase_order_id == po.id)
+        select(POLine)
+        .where(POLine.purchase_order_id == po.id)
+        .where(POLine.tenant_id == tenant.id)
     ).all()
 
     if not remaining_lines:

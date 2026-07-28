@@ -8,11 +8,11 @@ from src.db.models import (
     CountLine,
     InventoryItem,
     InventoryTransaction,
-    InventoryTransactionType,
     PhysicalCount,
     ShrinkageRate,
     Tenant,
 )
+from src.schemas.inventory import InventoryTransactionType
 from src.services.shrinkage_service import compute_shrinkage_rates
 
 

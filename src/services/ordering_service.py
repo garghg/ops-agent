@@ -153,7 +153,9 @@ def generate_proposals(session: Session, tenant_id, item_ids: list[str]) -> list
         )
 
         all_lines = session.scalars(
-            select(POLine).where(POLine.purchase_order_id == po.id)
+            select(POLine)
+            .where(POLine.purchase_order_id == po.id)
+            .where(POLine.tenant_id == tenant_id)
         ).all()
         po.total_value = sum(l.quantity_ordered * l.unit_cost for l in all_lines)
 
