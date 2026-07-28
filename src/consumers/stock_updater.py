@@ -21,7 +21,7 @@ def process_events(events: list[dict]) -> None:
         try:
             payload = InventoryEventPayload(**event["payload"])
             tenant_id = event["tenant_id"]
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"Bad payload, dropping event {event['id']}: {e}")
             r.xack(INVENTORY_STREAM, ConsumerGroup.STOCK_UPDATER.value, event["id"])
             continue
@@ -71,7 +71,11 @@ def stock_updater() -> None:
 
     while True:
         try:
-            events = read_event(...)
+            events = read_event(
+                EventCategory.INVENTORY,
+                ConsumerGroup.STOCK_UPDATER.value,
+                CONSUMER_NAME,
+            )
         except redis.exceptions.TimeoutError:
             events = []
 
@@ -80,7 +84,11 @@ def stock_updater() -> None:
         now = time.monotonic()
         if now - last_claim_check >= CLAIM_INTERVAL_SECONDS:
             last_claim_check = now
-            claimed_events = claim_pending_events(...)
+            claimed_events = claim_pending_events(
+                EventCategory.INVENTORY,
+                ConsumerGroup.STOCK_UPDATER.value,
+                CONSUMER_NAME,
+            )
             process_events(claimed_events)
 
         with SessionLocal() as session:
