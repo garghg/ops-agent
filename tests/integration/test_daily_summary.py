@@ -13,20 +13,20 @@ def tenant(seeded_db):
     return seeded_db.scalar(select(Tenant).limit(1))
 
 
-def _make_day_closed_event(tenant_id, business_date="2026-07-28"):
+def _make_forecasts_computed_event(tenant_id, business_date="2026-07-28"):
     return {
         "id": "fake-stream-id-summary",
-        "event_type": "day_closed",
+        "event_type": "forecasts_computed",
         "tenant_id": str(tenant_id),
         "priority": "4",
         "payload": {"business_date": business_date},
     }
 
 
-def _make_day_opened_event(tenant_id):
+def _make_day_closed_event(tenant_id):
     return {
         "id": "fake-stream-id-opened",
-        "event_type": "day_opened",
+        "event_type": "day_closed",
         "tenant_id": str(tenant_id),
         "priority": "4",
         "payload": {},
@@ -60,7 +60,7 @@ def _seed_sales(session, tenant, business_date="2026-07-28"):
 class TestSummaryHappyPath:
     def test_creates_outbox_row_with_summary(self, seeded_db, tenant):
         _seed_sales(seeded_db, tenant)
-        event = _make_day_closed_event(tenant.id)
+        event = _make_forecasts_computed_event(tenant.id)
 
         process_events([event])
 
@@ -81,7 +81,7 @@ class TestNoOwnerEmail:
         tenant.owner_email = None
         seeded_db.commit()
 
-        event = _make_day_closed_event(tenant.id)
+        event = _make_forecasts_computed_event(tenant.id)
         process_events([event])
 
         outbox = seeded_db.scalar(
@@ -96,9 +96,9 @@ class TestNoOwnerEmail:
         seeded_db.commit()
 
 
-class TestNonDayClosedSkipped:
+class TestNonForecastSkipped:
     def test_day_opened_event_ignored(self, seeded_db, tenant):
-        event = _make_day_opened_event(tenant.id)
+        event = _make_day_closed_event(tenant.id)
 
         process_events([event])
 
@@ -114,7 +114,7 @@ class TestNonDayClosedSkipped:
 class TestSummaryIdempotency:
     def test_duplicate_day_closed_produces_single_outbox(self, seeded_db, tenant):
         _seed_sales(seeded_db, tenant)
-        event = _make_day_closed_event(tenant.id)
+        event = _make_forecasts_computed_event(tenant.id)
 
         process_events([event])
         process_events([event])
@@ -132,7 +132,7 @@ class TestSummaryIdempotency:
 
 class TestZeroSalesDay:
     def test_summary_created_with_no_sales(self, seeded_db, tenant):
-        event = _make_day_closed_event(tenant.id, business_date="2026-01-01")
+        event = _make_forecasts_computed_event(tenant.id, business_date="2026-01-01")
 
         process_events([event])
 

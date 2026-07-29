@@ -14,5 +14,5 @@ from src.db.models.suppliers import (
     Supplier,
     SupplierItem,
 )
-from src.db.models.system import Heartbeat, SummaryGate
+from src.db.models.system import Heartbeat
 from src.db.models.weather import WeatherObservation
