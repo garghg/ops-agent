@@ -16,6 +16,7 @@ class SalesEventType(str, Enum):
 class SystemEventType(str, Enum):
     DAY_OPENED = "day_opened"
     DAY_CLOSED = "day_closed"
+    FORECASTS_COMPUTED = "forecasts_computed"
 
 
 class WorkforceEventType(str, Enum):
@@ -29,6 +30,7 @@ class ConsumerGroup(str, Enum):
     EMAIL_CONSUMER = "email_consumer"
     SALES_CONSUMER = "sales_consumer"
     SUMMARY_CONSUMER = "summary_consumer"
+    FORECAST_CONSUMER = "forecast_consumer"
 
 
 class InventoryEventType(str, Enum):
