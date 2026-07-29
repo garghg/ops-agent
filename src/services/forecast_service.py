@@ -8,7 +8,14 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from src.db.models import DailyActual, Forecast, SaleLineItem, SaleTransaction, Tenant
+from src.db.models import (
+    DailyActual,
+    Forecast,
+    ForecastMetric,
+    SaleLineItem,
+    SaleTransaction,
+    Tenant,
+)
 from src.schemas.sale import SaleTransactionType
 
 
@@ -151,5 +158,59 @@ def forecast_trailing_mean(session: Session, tenant_id: str, as_of_date: str):
             )
             
             session.execute(stmt)
+    
+    session.commit()
+    
+
+def compute_forecast_metrics(session: Session, tenant_id: str, metric_date: str):
+    metric_date = date.fromisoformat(metric_date)
+    actuals = session.scalars(
+        select(DailyActual)
+        .where(DailyActual.tenant_id == tenant_id)
+        .where(DailyActual.actual_date == metric_date)
+    ).all()
+    
+    forecasts = session.scalars(
+        select(Forecast)
+        .where(Forecast.tenant_id == tenant_id)
+        .where(Forecast.target_date == metric_date)
+    ).all()
+    
+    actuals_by_series = {a.series: a for a in actuals}
+    
+    for forecast in forecasts:
+        actual = actuals_by_series.get(forecast.series)
+        if not actual:
+            continue
+        mae = abs(forecast.point_estimate - actual.value)
+        bias = forecast.point_estimate - actual.value
+        coverage = None
+        if forecast.quantile_grid:
+            low = min(forecast.quantile_grid.values())
+            high = max(forecast.quantile_grid.values())
+            coverage = False
+            if low <= actual.value <= high:
+                coverage = True
+        
+        stmt = insert(ForecastMetric).values(
+            tenant_id=tenant_id,
+            series=forecast.series,
+            target_date=metric_date,
+            model_version=forecast.model_version,
+            mae=mae,
+            bias=bias,
+            coverage=coverage,
+        )
+
+        stmt = stmt.on_conflict_do_update(
+            constraint="forecast_metrics_tenant_series_target_model_key",
+            set_={
+                "mae": stmt.excluded.mae,
+                "bias": stmt.excluded.bias,
+                "coverage": stmt.excluded.coverage,
+            },
+        )
+
+        session.execute(stmt)
     
     session.commit()

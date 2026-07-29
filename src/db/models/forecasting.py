@@ -91,9 +91,7 @@ class ForecastMetric(Base):
     target_date: Mapped[date] = mapped_column(Date, nullable=False)
     model_version: Mapped[str] = mapped_column(Text, nullable=False)
     mae: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-    wape: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)
     bias: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-    skill: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)
     coverage: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
