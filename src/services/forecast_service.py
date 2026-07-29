@@ -214,3 +214,12 @@ def compute_forecast_metrics(session: Session, tenant_id: str, metric_date: str)
         session.execute(stmt)
     
     session.commit()
+    
+def backtest(session: Session, tenant_id: str, start_date: str, end_date: str):
+    start_date = date.fromisoformat(start_date)
+    end_date = date.fromisoformat(end_date)
+    for offset in range((end_date - start_date).days + 1):
+        current_date = start_date + timedelta(days=offset)
+        forecast_seasonal_naive(session, tenant_id, str(current_date))
+        forecast_trailing_mean(session, tenant_id, str(current_date))
+        compute_forecast_metrics(session, tenant_id, str(current_date))

@@ -6,10 +6,11 @@ import typer
 from rich.console import Console
 from rich.prompt import Prompt
 from rich.table import Table
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from src.cli.context import get_tenant
 from src.db.models import DailyActual, ForecastMetric
+from src.services.forecast_service import backtest as bt
 
 app = typer.Typer()
 
@@ -31,7 +32,7 @@ def forecast():
         .where(ForecastMetric.target_date >= start_date)
         .where(ForecastMetric.target_date <= end_date)
     ).all()
-    
+
     if not metrics:
         console.print("[yellow]No forecast metrics found for this range.[/yellow]")
         return
@@ -42,10 +43,10 @@ def forecast():
         .where(DailyActual.actual_date >= start_date)
         .where(DailyActual.actual_date <= end_date)
     ).all()
-    
+
     if not actuals:
-            console.print("[yellow]No records found for this range.[/yellow]")
-            return
+        console.print("[yellow]No records found for this range.[/yellow]")
+        return
 
     actuals_by_key = {(a.series, a.actual_date): a for a in actuals}
     metrics_by_group = defaultdict(list)
@@ -93,8 +94,7 @@ def forecast():
         else:
             skill = None
         aggregate_metrics[k]["skill"] = skill
-    
-    
+
     table = Table(title=f"Forecast Metrics — {start_date} to {end_date}")
     table.add_column("Model")
     table.add_column("Avg MAE", justify="right")
@@ -112,9 +112,27 @@ def forecast():
             f"{m['avg_mae']:.2f}",
             f"{m['wape'] * 100:.1f}%",
             f"{bias_sign}{bias_val:.2f}",
-            f"{m['coverage_rate'] * 100:.1f}%" if m["coverage_rate"] is not None else "n/a",
+            f"{m['coverage_rate'] * 100:.1f}%"
+            if m["coverage_rate"] is not None
+            else "n/a",
             f"{m['skill'] * 100:.1f}%" if m["skill"] is not None else "n/a",
         )
 
     console.print()
     console.print(table)
+
+
+@app.command()
+def backtest():
+    session, tenant = get_tenant()
+    earliest = session.scalar(
+        select(func.min(DailyActual.actual_date)).where(
+            DailyActual.tenant_id == tenant.id
+        )
+    )
+    latest = session.scalar(
+        select(func.max(DailyActual.actual_date)).where(
+            DailyActual.tenant_id == tenant.id
+        )
+    )
+    bt(session, str(tenant.id), str(earliest), str(latest))
