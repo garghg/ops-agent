@@ -24,6 +24,20 @@ from src.schemas.models import ModelVersion
 from src.schemas.sale import SaleTransactionType
 from src.schemas.weather import WeatherSource
 
+FORECAST_HORIZON = 14
+SEASONAL_NAIVE_LOOKBACK_DAYS = 28
+TRAILING_MEAN_LOOKBACK_DAYS = 7
+RESIDUAL_WINDOW_DAYS = 56
+MIN_BUCKET_SAMPLES = 10
+QUANTILE_LEVELS = [5, 20, 50, 80, 90, 95]
+QUANTILE_LABELS = ["p05", "p20", "p50", "p80", "p90", "p95"]
+HORIZON_SHORT = (1, 3)
+HORIZON_MEDIUM = (4, 7)
+HORIZON_LONG = (8, 14)
+PROMOTION_LOOKBACK_DAYS = 28
+COVERAGE_LOWER_BOUND = 80
+COVERAGE_UPPER_BOUND = 98
+
 
 def actuals_aggregate(session: Session, tenant_id: str, business_date: str):
     tenant = session.scalar(select(Tenant).where(Tenant.id == tenant_id))
@@ -84,7 +98,7 @@ def actuals_aggregate(session: Session, tenant_id: str, business_date: str):
 
 def forecast_seasonal_naive(session: Session, tenant_id: str, as_of_date: str):
     as_of_date = date.fromisoformat(as_of_date)
-    lookback = as_of_date - timedelta(days=28)
+    lookback = as_of_date - timedelta(days=SEASONAL_NAIVE_LOOKBACK_DAYS)
     actuals = session.execute(
         select(DailyActual.series, DailyActual.actual_date, DailyActual.value).where(
             DailyActual.tenant_id == tenant_id,
@@ -100,7 +114,7 @@ def forecast_seasonal_naive(session: Session, tenant_id: str, as_of_date: str):
 
     series_names = {row.series for row in actuals}
 
-    for offset in range(1, 15):
+    for offset in range(1, FORECAST_HORIZON + 1):
         target = as_of_date + timedelta(days=offset)
         weekday = target.weekday()
         for series in series_names:
@@ -130,7 +144,7 @@ def forecast_seasonal_naive(session: Session, tenant_id: str, as_of_date: str):
 
 def forecast_trailing_mean(session: Session, tenant_id: str, as_of_date: str):
     as_of_date = date.fromisoformat(as_of_date)
-    lookback = as_of_date - timedelta(days=7)
+    lookback = as_of_date - timedelta(days=TRAILING_MEAN_LOOKBACK_DAYS)
     actuals = session.execute(
         select(DailyActual.series, DailyActual.actual_date, DailyActual.value).where(
             DailyActual.tenant_id == tenant_id,
@@ -146,7 +160,7 @@ def forecast_trailing_mean(session: Session, tenant_id: str, as_of_date: str):
         if not numbers:
             continue
         average = sum(numbers) / len(numbers)
-        for offset in range(1, 15):
+        for offset in range(1, FORECAST_HORIZON + 1):
             target = as_of_date + timedelta(days=offset)
             stmt = insert(Forecast).values(
                 tenant_id=tenant_id,
@@ -288,7 +302,10 @@ def compute_quantile_grid(
     metrics = session.scalars(
         select(ForecastMetric)
         .where(ForecastMetric.tenant_id == tenant_id)
-        .where(ForecastMetric.target_date >= as_of_date - timedelta(days=56))
+        .where(
+            ForecastMetric.target_date
+            >= as_of_date - timedelta(days=RESIDUAL_WINDOW_DAYS)
+        )
         .where(ForecastMetric.target_date < as_of_date)
         .where(ForecastMetric.model_version == model_version)
     ).all()
@@ -301,25 +318,24 @@ def compute_quantile_grid(
     long = []
     for metric in metrics:
         horizon = (metric.target_date - metric.forecast_date).days
-        if 1 <= horizon <= 3:
+        if HORIZON_SHORT[0] <= horizon <= HORIZON_SHORT[1]:
             short.append(metric.bias)
-        elif 4 <= horizon <= 7:
+        elif HORIZON_MEDIUM[0] <= horizon <= HORIZON_MEDIUM[1]:
             med.append(metric.bias)
-        elif 8 <= horizon <= 14:
+        elif HORIZON_LONG[0] <= horizon <= HORIZON_LONG[1]:
             long.append(metric.bias)
 
-    labels = ["p05", "p20", "p50", "p80", "p90", "p95"]
     result = {}
 
-    if len(short) >= 10:
-        short_quantile = np.percentile(short, [5, 20, 50, 80, 90, 95])
-        result["short"] = dict(zip(labels, [float(v) for v in short_quantile]))
-    if len(med) >= 10:
-        med_quantile = np.percentile(med, [5, 20, 50, 80, 90, 95])
-        result["medium"] = dict(zip(labels, [float(v) for v in med_quantile]))
-    if len(long) >= 10:
-        long_quantile = np.percentile(long, [5, 20, 50, 80, 90, 95])
-        result["long"] = dict(zip(labels, [float(v) for v in long_quantile]))
+    if len(short) >= MIN_BUCKET_SAMPLES:
+        short_quantile = np.percentile(short, QUANTILE_LEVELS)
+        result["short"] = dict(zip(QUANTILE_LABELS, [float(v) for v in short_quantile]))
+    if len(med) >= MIN_BUCKET_SAMPLES:
+        med_quantile = np.percentile(med, QUANTILE_LEVELS)
+        result["medium"] = dict(zip(QUANTILE_LABELS, [float(v) for v in med_quantile]))
+    if len(long) >= MIN_BUCKET_SAMPLES:
+        long_quantile = np.percentile(long, QUANTILE_LEVELS)
+        result["long"] = dict(zip(QUANTILE_LABELS, [float(v) for v in long_quantile]))
 
     return result if result else None
 
@@ -345,7 +361,7 @@ def forecast_glm(session: Session, tenant_id: str, as_of_date: str):
             session, tenant_id, ModelVersion.POISSON_GLM.value, as_of_date
         )
 
-        for offset in range(1, 15):
+        for offset in range(1, FORECAST_HORIZON + 1):
             target_date = as_of_date + timedelta(days=offset)
             features = build_features(
                 session, tenant_id, str(target_date), WeatherSource.FORECAST.value
@@ -361,17 +377,15 @@ def forecast_glm(session: Session, tenant_id: str, as_of_date: str):
 
             bucket_dict = None
             if quantile_grid:
-                if offset < 4:
+                if HORIZON_SHORT[0] <= offset <= HORIZON_SHORT[1]:
                     bucket_dict = quantile_grid.get("short")
-                elif 3 < offset < 8:
+                elif HORIZON_MEDIUM[0] <= offset <= HORIZON_MEDIUM[1]:
                     bucket_dict = quantile_grid.get("medium")
-                elif 7 < offset < 15:
+                elif HORIZON_LONG[0] <= offset <= HORIZON_LONG[1]:
                     bucket_dict = quantile_grid.get("long")
 
             if bucket_dict:
-                bucket_dict = {
-                    k: float(prediction - v) for k, v in bucket_dict.items()
-                }
+                bucket_dict = {k: float(prediction - v) for k, v in bucket_dict.items()}
 
             stmt = insert(Forecast).values(
                 tenant_id=tenant_id,
@@ -405,3 +419,63 @@ def backtest(session: Session, tenant_id: str, start_date: str, end_date: str):
         forecast_trailing_mean(session, tenant_id, str(current_date))
         forecast_glm(session, tenant_id, str(current_date))
         compute_forecast_metrics(session, tenant_id, str(current_date))
+
+
+def check_promotion_gate(session: Session, tenant_id: str, as_of_date: str):
+    as_of_date = date.fromisoformat(as_of_date)
+
+    glm_metrics = session.scalars(
+        select(ForecastMetric)
+        .where(ForecastMetric.tenant_id == tenant_id)
+        .where(ForecastMetric.model_version == ModelVersion.POISSON_GLM.value)
+        .where(
+            ForecastMetric.target_date
+            >= as_of_date - timedelta(days=PROMOTION_LOOKBACK_DAYS)
+        )
+        .where(ForecastMetric.target_date < as_of_date)
+    ).all()
+
+    seasonal_metrics = session.scalars(
+        select(ForecastMetric)
+        .where(ForecastMetric.tenant_id == tenant_id)
+        .where(ForecastMetric.model_version == ModelVersion.SEASONAL_NAIVE.value)
+        .where(
+            ForecastMetric.target_date
+            >= as_of_date - timedelta(days=PROMOTION_LOOKBACK_DAYS)
+        )
+        .where(ForecastMetric.target_date < as_of_date)
+    ).all()
+
+    actuals = session.scalars(
+        select(DailyActual)
+        .where(DailyActual.tenant_id == tenant_id)
+        .where(
+            DailyActual.actual_date
+            >= as_of_date - timedelta(days=PROMOTION_LOOKBACK_DAYS)
+        )
+        .where(DailyActual.actual_date < as_of_date)
+    ).all()
+
+    if not (glm_metrics and seasonal_metrics and actuals):
+        return
+
+    total_actual = sum(actual.value for actual in actuals)
+    gm_total_mae = sum(gm.mae for gm in glm_metrics)
+    sm_total_mae = sum(sm.mae for sm in seasonal_metrics)
+    gm_coverage_total = sum(1 for gm in glm_metrics if gm.coverage is not None)
+    gm_coverage_true = sum(1 for gm in glm_metrics if gm.coverage)
+
+    glm_wape = gm_total_mae / total_actual
+    naive_wape = sm_total_mae / total_actual
+
+    skills = 1 - (glm_wape / naive_wape)
+    coverage_pct = (gm_coverage_true / gm_coverage_total) * 100
+    passed = False
+    if skills > 0 and COVERAGE_LOWER_BOUND <= coverage_pct <= COVERAGE_UPPER_BOUND:
+        passed = True
+
+    return {
+        "skills": skills,
+        "coverage_pct": coverage_pct,
+        "passed": passed,
+    }
