@@ -132,3 +132,36 @@ class ShareVector(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )
+    
+class ItemDemandForecast(Base):
+    __tablename__ = "item_demand_forecasts"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "inventory_item_id",
+            "target_date",
+            name="item_demand_forecasts_tenant_item_target_key",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    inventory_item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("inventory_items.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    target_date: Mapped[date] = mapped_column(Date, nullable=False)
+    point_estimate: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    quantile_grid: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    model_version: Mapped[str] = mapped_column(Text, nullable=False)
+    as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )

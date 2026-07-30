@@ -3,7 +3,13 @@ from src.db.models.catalog import BOMLine, CatalogItem, CatalogModifier, Mapping
 from src.db.models.comms import EmailOutbox
 from src.db.models.core import Template, Tenant, TenantConfig
 from src.db.models.counts import CountLine, PhysicalCount
-from src.db.models.forecasting import DailyActual, Forecast, ForecastMetric, ShareVector
+from src.db.models.forecasting import (
+    DailyActual,
+    Forecast,
+    ForecastMetric,
+    ShareVector,
+    ItemDemandForecast,
+)
 from src.db.models.inventory import InventoryItem, InventoryTransaction
 from src.db.models.sales import SaleLineItem, SaleTransaction
 from src.db.models.shrinkage import ShrinkageRate
