@@ -15,6 +15,7 @@ from src.db.models import (
     SaleLineItem,
     SaleTransaction,
     Tenant,
+    WeatherObservation,
 )
 from src.schemas.sale import SaleTransactionType
 
@@ -29,8 +30,7 @@ def actuals_aggregate(session: Session, tenant_id: str, business_date: str):
     )
 
     revenue = session.scalar(
-        select(func.coalesce(func.sum(SaleTransaction.total), Decimal(0)))
-        .where(
+        select(func.coalesce(func.sum(SaleTransaction.total), Decimal(0))).where(
             SaleTransaction.tenant_id == tenant_id,
             SaleTransaction.transaction_type == SaleTransactionType.SALE,
             SaleTransaction.timestamp >= day_start,
@@ -48,7 +48,7 @@ def actuals_aggregate(session: Session, tenant_id: str, business_date: str):
             SaleTransaction.timestamp < day_end,
         )
     )
-    
+
     revenue_stmt = insert(DailyActual).values(
         tenant_id=tenant_id,
         series="total_revenue",
@@ -59,9 +59,9 @@ def actuals_aggregate(session: Session, tenant_id: str, business_date: str):
         constraint="daily_actuals_tenant_series_date_key",
         set_={"value": revenue_stmt.excluded.value},
     )
-    
+
     session.execute(revenue_stmt)
-    
+
     units_stmt = insert(DailyActual).values(
         tenant_id=tenant_id,
         series="total_units",
@@ -72,30 +72,29 @@ def actuals_aggregate(session: Session, tenant_id: str, business_date: str):
         constraint="daily_actuals_tenant_series_date_key",
         set_={"value": units_stmt.excluded.value},
     )
-    
+
     session.execute(units_stmt)
     session.commit()
-    
+
 
 def forecast_seasonal_naive(session: Session, tenant_id: str, as_of_date: str):
     as_of_date = date.fromisoformat(as_of_date)
     lookback = as_of_date - timedelta(days=28)
     actuals = session.execute(
-        select(DailyActual.series, DailyActual.actual_date, DailyActual.value)
-        .where(
+        select(DailyActual.series, DailyActual.actual_date, DailyActual.value).where(
             DailyActual.tenant_id == tenant_id,
             DailyActual.actual_date >= lookback,
             DailyActual.actual_date < as_of_date,
         )
     ).all()
-    
+
     by_weekday = defaultdict(list)
     for row in actuals:
         key = (row.series, row.actual_date.weekday())
         by_weekday[key].append(row.value)
-    
+
     series_names = {row.series for row in actuals}
-    
+
     for offset in range(1, 15):
         target = as_of_date + timedelta(days=offset)
         weekday = target.weekday()
@@ -104,7 +103,7 @@ def forecast_seasonal_naive(session: Session, tenant_id: str, as_of_date: str):
             if not numbers:
                 continue
             average = sum(numbers) / len(numbers)
-        
+
             stmt = insert(Forecast).values(
                 tenant_id=tenant_id,
                 series=series,
@@ -112,14 +111,14 @@ def forecast_seasonal_naive(session: Session, tenant_id: str, as_of_date: str):
                 model_version="seasonal_naive",
                 point_estimate=average,
             )
-            
+
             stmt = stmt.on_conflict_do_update(
                 constraint="forecasts_tenant_series_target_model_key",
-                set_={"point_estimate": stmt.excluded.point_estimate}
+                set_={"point_estimate": stmt.excluded.point_estimate},
             )
-            
+
             session.execute(stmt)
-    
+
     session.commit()
 
 
@@ -127,16 +126,15 @@ def forecast_trailing_mean(session: Session, tenant_id: str, as_of_date: str):
     as_of_date = date.fromisoformat(as_of_date)
     lookback = as_of_date - timedelta(days=7)
     actuals = session.execute(
-        select(DailyActual.series, DailyActual.actual_date, DailyActual.value)
-        .where(
+        select(DailyActual.series, DailyActual.actual_date, DailyActual.value).where(
             DailyActual.tenant_id == tenant_id,
             DailyActual.actual_date >= lookback,
             DailyActual.actual_date < as_of_date,
         )
     ).all()
-    
+
     series_names = {row.series for row in actuals}
-    
+
     for series in series_names:
         numbers = [row.value for row in actuals if row.series == series]
         if not numbers:
@@ -151,16 +149,16 @@ def forecast_trailing_mean(session: Session, tenant_id: str, as_of_date: str):
                 model_version="trailing_7d_mean",
                 point_estimate=average,
             )
-            
+
             stmt = stmt.on_conflict_do_update(
                 constraint="forecasts_tenant_series_target_model_key",
-                set_={"point_estimate": stmt.excluded.point_estimate}
+                set_={"point_estimate": stmt.excluded.point_estimate},
             )
-            
+
             session.execute(stmt)
-    
+
     session.commit()
-    
+
 
 def compute_forecast_metrics(session: Session, tenant_id: str, metric_date: str):
     metric_date = date.fromisoformat(metric_date)
@@ -169,15 +167,15 @@ def compute_forecast_metrics(session: Session, tenant_id: str, metric_date: str)
         .where(DailyActual.tenant_id == tenant_id)
         .where(DailyActual.actual_date == metric_date)
     ).all()
-    
+
     forecasts = session.scalars(
         select(Forecast)
         .where(Forecast.tenant_id == tenant_id)
         .where(Forecast.target_date == metric_date)
     ).all()
-    
+
     actuals_by_series = {a.series: a for a in actuals}
-    
+
     for forecast in forecasts:
         actual = actuals_by_series.get(forecast.series)
         if not actual:
@@ -191,7 +189,7 @@ def compute_forecast_metrics(session: Session, tenant_id: str, metric_date: str)
             coverage = False
             if low <= actual.value <= high:
                 coverage = True
-        
+
         stmt = insert(ForecastMetric).values(
             tenant_id=tenant_id,
             series=forecast.series,
@@ -212,9 +210,10 @@ def compute_forecast_metrics(session: Session, tenant_id: str, metric_date: str)
         )
 
         session.execute(stmt)
-    
+
     session.commit()
-    
+
+
 def backtest(session: Session, tenant_id: str, start_date: str, end_date: str):
     start_date = date.fromisoformat(start_date)
     end_date = date.fromisoformat(end_date)
@@ -223,3 +222,29 @@ def backtest(session: Session, tenant_id: str, start_date: str, end_date: str):
         forecast_seasonal_naive(session, tenant_id, str(current_date))
         forecast_trailing_mean(session, tenant_id, str(current_date))
         compute_forecast_metrics(session, tenant_id, str(current_date))
+
+
+def build_features(
+    session: Session, tenant_id: str, target_date: str, weather_source: str
+):
+    target_date = date.fromisoformat(target_date)
+
+    weather = session.scalar(
+        select(WeatherObservation)
+        .where(WeatherObservation.tenant_id == tenant_id)
+        .where(WeatherObservation.observation_date == target_date)
+        .where(WeatherObservation.source == weather_source)
+    )
+
+    if not weather:
+        return None
+
+    return {
+        "day_of_week": target_date.weekday(),
+        "month": target_date.month,
+        "is_holiday": False,
+        "is_school_break": False,
+        "max_temp": float(weather.max_temp_c),
+        "precipitation": float(weather.precipitation_mm),
+    }
+    

@@ -1,10 +1,12 @@
+from datetime import date, timedelta
+
 import httpx
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
-from src.db.session import SessionLocal
-from src.db.models import Tenant, WeatherObservation
 from sqlalchemy.dialects.postgresql import insert
-from datetime import date, timedelta
+from sqlalchemy.orm import Session
+
+from src.db.models import Tenant, WeatherObservation
+from src.db.session import SessionLocal
 
 
 def geocode(city: str) -> tuple[float, float, str]:
