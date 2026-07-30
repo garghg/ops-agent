@@ -319,11 +319,11 @@ def compute_quantile_grid(
     for metric in metrics:
         horizon = (metric.target_date - metric.forecast_date).days
         if HORIZON_SHORT[0] <= horizon <= HORIZON_SHORT[1]:
-            short.append(metric.bias)
+            short.append(float(metric.bias))
         elif HORIZON_MEDIUM[0] <= horizon <= HORIZON_MEDIUM[1]:
-            med.append(metric.bias)
+            med.append(float(metric.bias))
         elif HORIZON_LONG[0] <= horizon <= HORIZON_LONG[1]:
-            long.append(metric.bias)
+            long.append(float(metric.bias))
 
     result = {}
 
