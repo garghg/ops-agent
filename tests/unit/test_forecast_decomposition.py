@@ -26,7 +26,10 @@ from src.services.forecast_service import (
 
 @pytest.fixture
 def tenant(seeded_db):
-    return seeded_db.scalar(select(Tenant).limit(1))
+    t = seeded_db.scalar(select(Tenant).limit(1))
+    t.timezone = "America/Vancouver"
+    seeded_db.commit()
+    return t
 
 
 @pytest.fixture
@@ -304,7 +307,9 @@ class TestComputeIntradayProfiles:
             tenant_id=tenant.id,
             external_transaction_id="intra-001",
             source="synthetic",
-            timestamp=datetime(2026, 7, 20, 14, 0, 0, tzinfo=ZoneInfo("America/Vancouver")),
+            timestamp=datetime(
+                2026, 7, 20, 14, 0, 0, tzinfo=ZoneInfo("America/Vancouver")
+            ),
             total=Decimal("40.00"),
             payment_method="card",
             transaction_type="sale",
@@ -313,7 +318,9 @@ class TestComputeIntradayProfiles:
             tenant_id=tenant.id,
             external_transaction_id="intra-002",
             source="synthetic",
-            timestamp=datetime(2026, 7, 20, 15, 0, 0, tzinfo=ZoneInfo("America/Vancouver")),
+            timestamp=datetime(
+                2026, 7, 20, 15, 0, 0, tzinfo=ZoneInfo("America/Vancouver")
+            ),
             total=Decimal("60.00"),
             payment_method="card",
             transaction_type="sale",
@@ -367,7 +374,9 @@ class TestComputeIntradayProfiles:
                 tenant_id=tenant.id,
                 external_transaction_id=f"sum-{hour}",
                 source="synthetic",
-                timestamp=datetime(2026, 7, 21, hour, 0, 0, tzinfo=ZoneInfo("America/Vancouver")),
+                timestamp=datetime(
+                    2026, 7, 21, hour, 0, 0, tzinfo=ZoneInfo("America/Vancouver")
+                ),
                 total=Decimal(str(qty)),
                 payment_method="card",
                 transaction_type="sale",
