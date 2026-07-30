@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 
 from src.cli.context import get_tenant
 from src.db.models import DailyActual, ForecastMetric
+from src.schemas.models import ModelVersion
 from src.services.forecast_service import backtest as bt
 
 app = typer.Typer()
@@ -86,7 +87,7 @@ def forecast():
             "coverage_rate": coverage_rate,
         }
 
-    naive_wape = aggregate_metrics.get("seasonal_naive", {"wape": Decimal(0)})["wape"]
+    naive_wape = aggregate_metrics.get(ModelVersion.SEASONAL_NAIVE.value, {"wape": Decimal(0)})["wape"]
     for k in aggregate_metrics:  # noqa: PLC0206
         model_wape = aggregate_metrics.get(k, {"wape": Decimal(0)})["wape"]
         if naive_wape > 0:

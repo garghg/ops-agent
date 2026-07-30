@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from src.db.models import Tenant, WeatherObservation
 from src.db.session import SessionLocal
+from src.schemas.weather import WeatherSource
 
 
 def geocode(city: str) -> tuple[float, float, str]:
@@ -102,9 +103,9 @@ def collect_weather():
 
         for tenant in tenants:
             forecasts = fetch_forecast(float(tenant.latitude), float(tenant.longitude))
-            update_db(session, forecasts, tenant.id, "forecast")
+            update_db(session, forecasts, tenant.id, WeatherSource.FORECAST.value)
 
             actuals = fetch_actuals(
                 float(tenant.latitude), float(tenant.longitude), yesterday, yesterday
             )
-            update_db(session, actuals, tenant.id, "actual")
+            update_db(session, actuals, tenant.id, WeatherSource.ACTUAL.value)

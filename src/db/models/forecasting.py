@@ -18,7 +18,8 @@ class Forecast(Base):
             "series",
             "target_date",
             "model_version",
-            name="forecasts_tenant_series_target_model_key",
+            "forecast_date",
+            name="forecasts_tenant_series_target_model_fcdate_key",
         ),
     )
 
@@ -32,6 +33,7 @@ class Forecast(Base):
     )
     series: Mapped[str] = mapped_column(Text, nullable=False)
     target_date: Mapped[date] = mapped_column(Date, nullable=False)
+    forecast_date: Mapped[date] = mapped_column(Date, nullable=False)
     model_version: Mapped[str] = mapped_column(Text, nullable=False)
     point_estimate: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     quantile_grid: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
@@ -75,7 +77,8 @@ class ForecastMetric(Base):
             "series",
             "target_date",
             "model_version",
-            name="forecast_metrics_tenant_series_target_model_key",
+            "forecast_date",
+            name="forecast_metrics_tenant_series_target_model_fcdate_key",
         ),
     )
 
@@ -89,6 +92,7 @@ class ForecastMetric(Base):
     )
     series: Mapped[str] = mapped_column(Text, nullable=False)
     target_date: Mapped[date] = mapped_column(Date, nullable=False)
+    forecast_date: Mapped[date] = mapped_column(Date, nullable=False)
     model_version: Mapped[str] = mapped_column(Text, nullable=False)
     mae: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     bias: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)

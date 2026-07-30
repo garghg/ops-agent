@@ -4,6 +4,7 @@ from datetime import time as dt_time
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
+import numpy as np
 import pandas as pd
 from sklearn.linear_model import PoissonRegressor
 from sqlalchemy import func, select
@@ -19,7 +20,9 @@ from src.db.models import (
     Tenant,
     WeatherObservation,
 )
+from src.schemas.models import ModelVersion
 from src.schemas.sale import SaleTransactionType
+from src.schemas.weather import WeatherSource
 
 
 def actuals_aggregate(session: Session, tenant_id: str, business_date: str):
@@ -110,12 +113,13 @@ def forecast_seasonal_naive(session: Session, tenant_id: str, as_of_date: str):
                 tenant_id=tenant_id,
                 series=series,
                 target_date=target,
-                model_version="seasonal_naive",
+                model_version=ModelVersion.SEASONAL_NAIVE.value,
                 point_estimate=average,
+                forecast_date=as_of_date,
             )
 
             stmt = stmt.on_conflict_do_update(
-                constraint="forecasts_tenant_series_target_model_key",
+                constraint="forecasts_tenant_series_target_model_fcdate_key",
                 set_={"point_estimate": stmt.excluded.point_estimate},
             )
 
@@ -148,12 +152,13 @@ def forecast_trailing_mean(session: Session, tenant_id: str, as_of_date: str):
                 tenant_id=tenant_id,
                 series=series,
                 target_date=target,
-                model_version="trailing_7d_mean",
+                model_version=ModelVersion.TRAILING_7D_MEAN.value,
                 point_estimate=average,
+                forecast_date=as_of_date,
             )
 
             stmt = stmt.on_conflict_do_update(
-                constraint="forecasts_tenant_series_target_model_key",
+                constraint="forecasts_tenant_series_target_model_fcdate_key",
                 set_={"point_estimate": stmt.excluded.point_estimate},
             )
 
@@ -200,10 +205,11 @@ def compute_forecast_metrics(session: Session, tenant_id: str, metric_date: str)
             mae=mae,
             bias=bias,
             coverage=coverage,
+            forecast_date=forecast.forecast_date,
         )
 
         stmt = stmt.on_conflict_do_update(
-            constraint="forecast_metrics_tenant_series_target_model_key",
+            constraint="forecast_metrics_tenant_series_target_model_fcdate_key",
             set_={
                 "mae": stmt.excluded.mae,
                 "bias": stmt.excluded.bias,
@@ -214,16 +220,6 @@ def compute_forecast_metrics(session: Session, tenant_id: str, metric_date: str)
         session.execute(stmt)
 
     session.commit()
-
-
-def backtest(session: Session, tenant_id: str, start_date: str, end_date: str):
-    start_date = date.fromisoformat(start_date)
-    end_date = date.fromisoformat(end_date)
-    for offset in range((end_date - start_date).days + 1):
-        current_date = start_date + timedelta(days=offset)
-        forecast_seasonal_naive(session, tenant_id, str(current_date))
-        forecast_trailing_mean(session, tenant_id, str(current_date))
-        compute_forecast_metrics(session, tenant_id, str(current_date))
 
 
 def build_features(
@@ -239,7 +235,7 @@ def build_features(
     )
 
     if not weather:
-        return None
+        return
 
     return {
         "day_of_week": target_date.weekday(),
@@ -265,7 +261,10 @@ def train_glm(session: Session, tenant_id: str, series: str):
     targets = []
     for actual in actuals:
         f = build_features(
-            session, str(actual.tenant_id), str(actual.actual_date), "actual"
+            session,
+            str(actual.tenant_id),
+            str(actual.actual_date),
+            WeatherSource.ACTUAL.value,
         )
         if f is None:
             continue
@@ -281,51 +280,128 @@ def train_glm(session: Session, tenant_id: str, series: str):
     return model, df.columns.tolist()
 
 
+def compute_quantile_grid(
+    session: Session, tenant_id: str, model_version: str, as_of_date: str
+):
+    as_of_date = date.fromisoformat(as_of_date)
+
+    metrics = session.scalars(
+        select(ForecastMetric)
+        .where(ForecastMetric.tenant_id == tenant_id)
+        .where(ForecastMetric.target_date >= as_of_date - timedelta(days=56))
+        .where(ForecastMetric.target_date < as_of_date)
+        .where(ForecastMetric.model_version == model_version)
+    ).all()
+
+    if not metrics:
+        return
+
+    short = []
+    med = []
+    long = []
+    for metric in metrics:
+        horizon = (metric.target_date - metric.forecast_date).days
+        if 1 <= horizon <= 3:
+            short.append(metric.bias)
+        elif 4 <= horizon <= 7:
+            med.append(metric.bias)
+        elif 8 <= horizon <= 14:
+            long.append(metric.bias)
+
+    labels = ["p05", "p20", "p50", "p80", "p90", "p95"]
+    result = {}
+
+    if len(short) >= 10:
+        short_quantile = np.percentile(short, [5, 20, 50, 80, 90, 95])
+        result["short"] = dict(zip(labels, [float(v) for v in short_quantile]))
+    if len(med) >= 10:
+        med_quantile = np.percentile(med, [5, 20, 50, 80, 90, 95])
+        result["medium"] = dict(zip(labels, [float(v) for v in med_quantile]))
+    if len(long) >= 10:
+        long_quantile = np.percentile(long, [5, 20, 50, 80, 90, 95])
+        result["long"] = dict(zip(labels, [float(v) for v in long_quantile]))
+
+    return result if result else None
+
+
 def forecast_glm(session: Session, tenant_id: str, as_of_date: str):
     series_lst = session.scalars(
-        select(DailyActual.series)
-        .where(DailyActual.tenant_id == tenant_id)
-        .distinct()
+        select(DailyActual.series).where(DailyActual.tenant_id == tenant_id).distinct()
     ).all()
-    
+
     if not series_lst:
         return
-    
+
     as_of_date = date.fromisoformat(as_of_date)
-    
+
     for series in series_lst:
         result = train_glm(session, tenant_id, series)
-        
+
         if result is None:
             continue
-        
+
         model, columns = result
+        quantile_grid = compute_quantile_grid(
+            session, tenant_id, ModelVersion.POISSON_GLM.value, as_of_date
+        )
 
         for offset in range(1, 15):
             target_date = as_of_date + timedelta(days=offset)
-            features = build_features(session, tenant_id, str(target_date), "forecast")
-            
+            features = build_features(
+                session, tenant_id, str(target_date), WeatherSource.FORECAST.value
+            )
+
             if features is None:
                 continue
-            
+
             df = pd.DataFrame([features])
             df = pd.get_dummies(df, columns=["day_of_week", "month"])
             df = df.reindex(columns=columns, fill_value=0)
             prediction = model.predict(df)[0]
-            
+
+            bucket_dict = None
+            if quantile_grid:
+                if offset < 4:
+                    bucket_dict = quantile_grid.get("short")
+                elif 3 < offset < 8:
+                    bucket_dict = quantile_grid.get("medium")
+                elif 7 < offset < 15:
+                    bucket_dict = quantile_grid.get("long")
+
+            if bucket_dict:
+                bucket_dict = {
+                    k: float(prediction - v) for k, v in bucket_dict.items()
+                }
+
             stmt = insert(Forecast).values(
                 tenant_id=tenant_id,
                 series=series,
                 target_date=target_date,
-                model_version="poisson_glm",
+                model_version=ModelVersion.POISSON_GLM.value,
                 point_estimate=prediction,
+                forecast_date=as_of_date,
+                quantile_grid=bucket_dict,
             )
 
             stmt = stmt.on_conflict_do_update(
-                constraint="forecasts_tenant_series_target_model_key",
-                set_={"point_estimate": stmt.excluded.point_estimate},
+                constraint="forecasts_tenant_series_target_model_fcdate_key",
+                set_={
+                    "point_estimate": stmt.excluded.point_estimate,
+                    "quantile_grid": stmt.excluded.quantile_grid,
+                },
             )
 
             session.execute(stmt)
 
         session.commit()
+
+
+def backtest(session: Session, tenant_id: str, start_date: str, end_date: str):
+    start_date = date.fromisoformat(start_date)
+    end_date = date.fromisoformat(end_date)
+    for offset in range((end_date - start_date).days + 1):
+        current_date = start_date + timedelta(days=offset)
+        forecast_seasonal_naive(session, tenant_id, str(current_date))
+        forecast_trailing_mean(session, tenant_id, str(current_date))
+        forecast_glm(session, tenant_id, str(current_date))
+        compute_forecast_metrics(session, tenant_id, str(current_date))
