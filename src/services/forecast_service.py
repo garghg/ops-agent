@@ -4,6 +4,8 @@ from datetime import time as dt_time
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
+import pandas as pd
+from sklearn.linear_model import PoissonRegressor
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
@@ -247,4 +249,67 @@ def build_features(
         "max_temp": float(weather.max_temp_c),
         "precipitation": float(weather.precipitation_mm),
     }
-    
+
+
+def train_glm(session: Session, tenant_id: str, series: str):
+    actuals = session.scalars(
+        select(DailyActual)
+        .where(DailyActual.tenant_id == tenant_id)
+        .where(DailyActual.series == series)
+    ).all()
+
+    if not actuals:
+        return
+
+    features = []
+    targets = []
+    for actual in actuals:
+        f = build_features(
+            session, str(actual.tenant_id), str(actual.actual_date), "actual"
+        )
+        if f is None:
+            continue
+        features.append(f)
+        targets.append(float(actual.value))
+
+    if not features:
+        return
+    df = pd.DataFrame(features)
+    df = pd.get_dummies(df, columns=["day_of_week", "month"])
+    model = PoissonRegressor()
+    model.fit(df, targets)
+    return model, df.columns.tolist()
+
+
+def forecast_glm(session: Session, tenant_id: str, series: str, as_of_date: str):
+    result = train_glm(session, tenant_id, series)
+    if result is None:
+        return
+    model, columns = result
+    as_of_date = date.fromisoformat(as_of_date)
+
+    for offset in range(1, 15):
+        target_date = as_of_date + timedelta(days=offset)
+        features = build_features(session, tenant_id, str(target_date), "forecast")
+        if features is None:
+            continue
+        df = pd.DataFrame([features])
+        df = pd.get_dummies(df, columns=["day_of_week", "month"])
+        df = df.reindex(columns=columns, fill_value=0)
+        prediction = model.predict(df)[0]
+        stmt = insert(Forecast).values(
+            tenant_id=tenant_id,
+            series=series,
+            target_date=target_date,
+            model_version="poisson_glm",
+            point_estimate=prediction,
+        )
+
+        stmt = stmt.on_conflict_do_update(
+            constraint="forecasts_tenant_series_target_model_key",
+            set_={"point_estimate": stmt.excluded.point_estimate},
+        )
+
+        session.execute(stmt)
+
+    session.commit()
