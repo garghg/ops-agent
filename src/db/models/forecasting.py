@@ -108,7 +108,8 @@ class ShareVector(Base):
             "tenant_id",
             "inventory_item_id",
             "day_of_week",
-            name="share_vectors_tenant_item_dow_key",
+            "as_of_date",
+            name="share_vectors_tenant_item_dow_date_key",
         ),
     )
 

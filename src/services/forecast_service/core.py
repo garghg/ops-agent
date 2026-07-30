@@ -10,10 +10,6 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from services.forecast_service.metrics import (
-    compute_forecast_metrics,
-    compute_quantile_grid,
-)
 from src.db.models import (
     DailyActual,
     Forecast,
@@ -32,6 +28,10 @@ from src.services.forecast_service.config import (
     HORIZON_SHORT,
     SEASONAL_NAIVE_LOOKBACK_DAYS,
     TRAILING_MEAN_LOOKBACK_DAYS,
+)
+from src.services.forecast_service.metrics import (
+    compute_forecast_metrics,
+    compute_quantile_grid,
 )
 
 
