@@ -4,17 +4,19 @@ from datetime import time as dt_time
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-import numpy as np
 import pandas as pd
 from sklearn.linear_model import PoissonRegressor
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from services.forecast_service.metrics import (
+    compute_forecast_metrics,
+    compute_quantile_grid,
+)
 from src.db.models import (
     DailyActual,
     Forecast,
-    ForecastMetric,
     SaleLineItem,
     SaleTransaction,
     Tenant,
@@ -23,20 +25,14 @@ from src.db.models import (
 from src.schemas.models import ModelVersion
 from src.schemas.sale import SaleTransactionType
 from src.schemas.weather import WeatherSource
-
-FORECAST_HORIZON = 14
-SEASONAL_NAIVE_LOOKBACK_DAYS = 28
-TRAILING_MEAN_LOOKBACK_DAYS = 7
-RESIDUAL_WINDOW_DAYS = 56
-MIN_BUCKET_SAMPLES = 10
-QUANTILE_LEVELS = [5, 20, 50, 80, 90, 95]
-QUANTILE_LABELS = ["p05", "p20", "p50", "p80", "p90", "p95"]
-HORIZON_SHORT = (1, 3)
-HORIZON_MEDIUM = (4, 7)
-HORIZON_LONG = (8, 14)
-PROMOTION_LOOKBACK_DAYS = 28
-COVERAGE_LOWER_BOUND = 80
-COVERAGE_UPPER_BOUND = 98
+from src.services.forecast_service.config import (
+    FORECAST_HORIZON,
+    HORIZON_LONG,
+    HORIZON_MEDIUM,
+    HORIZON_SHORT,
+    SEASONAL_NAIVE_LOOKBACK_DAYS,
+    TRAILING_MEAN_LOOKBACK_DAYS,
+)
 
 
 def actuals_aggregate(session: Session, tenant_id: str, business_date: str):
@@ -181,61 +177,6 @@ def forecast_trailing_mean(session: Session, tenant_id: str, as_of_date: str):
     session.commit()
 
 
-def compute_forecast_metrics(session: Session, tenant_id: str, metric_date: str):
-    metric_date = date.fromisoformat(metric_date)
-    actuals = session.scalars(
-        select(DailyActual)
-        .where(DailyActual.tenant_id == tenant_id)
-        .where(DailyActual.actual_date == metric_date)
-    ).all()
-
-    forecasts = session.scalars(
-        select(Forecast)
-        .where(Forecast.tenant_id == tenant_id)
-        .where(Forecast.target_date == metric_date)
-    ).all()
-
-    actuals_by_series = {a.series: a for a in actuals}
-
-    for forecast in forecasts:
-        actual = actuals_by_series.get(forecast.series)
-        if not actual:
-            continue
-        mae = abs(forecast.point_estimate - actual.value)
-        bias = forecast.point_estimate - actual.value
-        coverage = None
-        if forecast.quantile_grid:
-            low = min(forecast.quantile_grid.values())
-            high = max(forecast.quantile_grid.values())
-            coverage = False
-            if low <= actual.value <= high:
-                coverage = True
-
-        stmt = insert(ForecastMetric).values(
-            tenant_id=tenant_id,
-            series=forecast.series,
-            target_date=metric_date,
-            model_version=forecast.model_version,
-            mae=mae,
-            bias=bias,
-            coverage=coverage,
-            forecast_date=forecast.forecast_date,
-        )
-
-        stmt = stmt.on_conflict_do_update(
-            constraint="forecast_metrics_tenant_series_target_model_fcdate_key",
-            set_={
-                "mae": stmt.excluded.mae,
-                "bias": stmt.excluded.bias,
-                "coverage": stmt.excluded.coverage,
-            },
-        )
-
-        session.execute(stmt)
-
-    session.commit()
-
-
 def build_features(
     session: Session, tenant_id: str, target_date: str, weather_source: str
 ):
@@ -292,52 +233,6 @@ def train_glm(session: Session, tenant_id: str, series: str):
     model = PoissonRegressor()
     model.fit(df, targets)
     return model, df.columns.tolist()
-
-
-def compute_quantile_grid(
-    session: Session, tenant_id: str, model_version: str, as_of_date: str
-):
-    as_of_date = date.fromisoformat(as_of_date)
-
-    metrics = session.scalars(
-        select(ForecastMetric)
-        .where(ForecastMetric.tenant_id == tenant_id)
-        .where(
-            ForecastMetric.target_date
-            >= as_of_date - timedelta(days=RESIDUAL_WINDOW_DAYS)
-        )
-        .where(ForecastMetric.target_date < as_of_date)
-        .where(ForecastMetric.model_version == model_version)
-    ).all()
-
-    if not metrics:
-        return
-
-    short = []
-    med = []
-    long = []
-    for metric in metrics:
-        horizon = (metric.target_date - metric.forecast_date).days
-        if HORIZON_SHORT[0] <= horizon <= HORIZON_SHORT[1]:
-            short.append(float(metric.bias))
-        elif HORIZON_MEDIUM[0] <= horizon <= HORIZON_MEDIUM[1]:
-            med.append(float(metric.bias))
-        elif HORIZON_LONG[0] <= horizon <= HORIZON_LONG[1]:
-            long.append(float(metric.bias))
-
-    result = {}
-
-    if len(short) >= MIN_BUCKET_SAMPLES:
-        short_quantile = np.percentile(short, QUANTILE_LEVELS)
-        result["short"] = dict(zip(QUANTILE_LABELS, [float(v) for v in short_quantile]))
-    if len(med) >= MIN_BUCKET_SAMPLES:
-        med_quantile = np.percentile(med, QUANTILE_LEVELS)
-        result["medium"] = dict(zip(QUANTILE_LABELS, [float(v) for v in med_quantile]))
-    if len(long) >= MIN_BUCKET_SAMPLES:
-        long_quantile = np.percentile(long, QUANTILE_LEVELS)
-        result["long"] = dict(zip(QUANTILE_LABELS, [float(v) for v in long_quantile]))
-
-    return result if result else None
 
 
 def forecast_glm(session: Session, tenant_id: str, as_of_date: str):
@@ -419,63 +314,3 @@ def backtest(session: Session, tenant_id: str, start_date: str, end_date: str):
         forecast_trailing_mean(session, tenant_id, str(current_date))
         forecast_glm(session, tenant_id, str(current_date))
         compute_forecast_metrics(session, tenant_id, str(current_date))
-
-
-def check_promotion_gate(session: Session, tenant_id: str, as_of_date: str):
-    as_of_date = date.fromisoformat(as_of_date)
-
-    glm_metrics = session.scalars(
-        select(ForecastMetric)
-        .where(ForecastMetric.tenant_id == tenant_id)
-        .where(ForecastMetric.model_version == ModelVersion.POISSON_GLM.value)
-        .where(
-            ForecastMetric.target_date
-            >= as_of_date - timedelta(days=PROMOTION_LOOKBACK_DAYS)
-        )
-        .where(ForecastMetric.target_date < as_of_date)
-    ).all()
-
-    seasonal_metrics = session.scalars(
-        select(ForecastMetric)
-        .where(ForecastMetric.tenant_id == tenant_id)
-        .where(ForecastMetric.model_version == ModelVersion.SEASONAL_NAIVE.value)
-        .where(
-            ForecastMetric.target_date
-            >= as_of_date - timedelta(days=PROMOTION_LOOKBACK_DAYS)
-        )
-        .where(ForecastMetric.target_date < as_of_date)
-    ).all()
-
-    actuals = session.scalars(
-        select(DailyActual)
-        .where(DailyActual.tenant_id == tenant_id)
-        .where(
-            DailyActual.actual_date
-            >= as_of_date - timedelta(days=PROMOTION_LOOKBACK_DAYS)
-        )
-        .where(DailyActual.actual_date < as_of_date)
-    ).all()
-
-    if not (glm_metrics and seasonal_metrics and actuals):
-        return
-
-    total_actual = sum(actual.value for actual in actuals)
-    gm_total_mae = sum(gm.mae for gm in glm_metrics)
-    sm_total_mae = sum(sm.mae for sm in seasonal_metrics)
-    gm_coverage_total = sum(1 for gm in glm_metrics if gm.coverage is not None)
-    gm_coverage_true = sum(1 for gm in glm_metrics if gm.coverage)
-
-    glm_wape = gm_total_mae / total_actual
-    naive_wape = sm_total_mae / total_actual
-
-    skills = 1 - (glm_wape / naive_wape)
-    coverage_pct = (gm_coverage_true / gm_coverage_total) * 100
-    passed = False
-    if skills > 0 and COVERAGE_LOWER_BOUND <= coverage_pct <= COVERAGE_UPPER_BOUND:
-        passed = True
-
-    return {
-        "skills": skills,
-        "coverage_pct": coverage_pct,
-        "passed": passed,
-    }

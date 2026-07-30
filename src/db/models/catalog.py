@@ -1,20 +1,21 @@
-from src.db.models.base import Base
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import (
+    Boolean,
     ForeignKey,
+    Integer,
     Numeric,
     Text,
-    Integer,
     UniqueConstraint,
-    Boolean,
     text,
 )
 from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
-from decimal import Decimal
+
+from src.db.models.base import Base
 
 
 class CatalogItem(Base):
