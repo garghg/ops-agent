@@ -7,8 +7,9 @@ from src.db.models.forecasting import (
     DailyActual,
     Forecast,
     ForecastMetric,
-    ShareVector,
+    IntradayProfile,
     ItemDemandForecast,
+    ShareVector,
 )
 from src.db.models.inventory import InventoryItem, InventoryTransaction
 from src.db.models.sales import SaleLineItem, SaleTransaction

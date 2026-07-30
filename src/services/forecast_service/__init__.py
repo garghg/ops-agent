@@ -12,3 +12,8 @@ from src.services.forecast_service.metrics import (
     compute_forecast_metrics,
     compute_quantile_grid,
 )
+from src.services.forecast_service.decomposition import (
+    compute_intraday_profiles,
+    compute_item_demand,
+    compute_share_vectors,
+)

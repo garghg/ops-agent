@@ -165,3 +165,31 @@ class ItemDemandForecast(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )
+    
+class IntradayProfile(Base):
+    __tablename__ = "intraday_profiles"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "day_of_week",
+            "hour",
+            "as_of_date",
+            name="intraday_profiles_tenant_dow_hour_date_key",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    day_of_week: Mapped[int] = mapped_column(nullable=False)
+    hour: Mapped[int] = mapped_column(nullable=False)
+    fraction: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False)
+    as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
