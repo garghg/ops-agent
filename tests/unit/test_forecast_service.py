@@ -48,22 +48,24 @@ class TestActualsAggregate:
         seeded_db.add_all([txn1, txn2])
         seeded_db.flush()
 
-        seeded_db.add_all([
-            SaleLineItem(
-                sale_transaction_id=txn1.id,
-                item_name="Single Scoop",
-                quantity=2,
-                unit_price=Decimal("12.50"),
-                tenant_id=tenant.id,
-            ),
-            SaleLineItem(
-                sale_transaction_id=txn2.id,
-                item_name="Double Scoop",
-                quantity=1,
-                unit_price=Decimal("15.00"),
-                tenant_id=tenant.id,
-            ),
-        ])
+        seeded_db.add_all(
+            [
+                SaleLineItem(
+                    sale_transaction_id=txn1.id,
+                    item_name="Single Scoop",
+                    quantity=2,
+                    unit_price=Decimal("12.50"),
+                    tenant_id=tenant.id,
+                ),
+                SaleLineItem(
+                    sale_transaction_id=txn2.id,
+                    item_name="Double Scoop",
+                    quantity=1,
+                    unit_price=Decimal("15.00"),
+                    tenant_id=tenant.id,
+                ),
+            ]
+        )
         seeded_db.commit()
 
         actuals_aggregate(seeded_db, str(tenant.id), "2026-07-28")
@@ -86,15 +88,17 @@ class TestActualsAggregate:
         assert units == 3
 
     def test_idempotent(self, seeded_db, tenant):
-        seeded_db.add(SaleTransaction(
-            external_transaction_id="agg-idem-001",
-            source="synthetic",
-            timestamp=datetime.fromisoformat("2026-07-27T12:00:00+00:00"),
-            total=Decimal("10.00"),
-            payment_method="card",
-            transaction_type="sale",
-            tenant_id=tenant.id,
-        ))
+        seeded_db.add(
+            SaleTransaction(
+                external_transaction_id="agg-idem-001",
+                source="synthetic",
+                timestamp=datetime.fromisoformat("2026-07-27T12:00:00+00:00"),
+                total=Decimal("10.00"),
+                payment_method="card",
+                transaction_type="sale",
+                tenant_id=tenant.id,
+            )
+        )
         seeded_db.commit()
 
         actuals_aggregate(seeded_db, str(tenant.id), "2026-07-27")
@@ -114,15 +118,22 @@ class TestActualsAggregate:
 class TestForecastSeasonalNaive:
     def test_averages_same_weekday(self, seeded_db, tenant):
         # Seed 4 Mondays of data
-        mondays = [date(2026, 6, 29), date(2026, 7, 6), date(2026, 7, 13), date(2026, 7, 20)]
+        mondays = [
+            date(2026, 6, 29),
+            date(2026, 7, 6),
+            date(2026, 7, 13),
+            date(2026, 7, 20),
+        ]
         values = [Decimal(100), Decimal(120), Decimal(140), Decimal(160)]
         for d, v in zip(mondays, values):
-            seeded_db.add(DailyActual(
-                tenant_id=tenant.id,
-                series="total_revenue",
-                actual_date=d,
-                value=v,
-            ))
+            seeded_db.add(
+                DailyActual(
+                    tenant_id=tenant.id,
+                    series="total_revenue",
+                    actual_date=d,
+                    value=v,
+                )
+            )
         seeded_db.commit()
 
         forecast_seasonal_naive(seeded_db, str(tenant.id), "2026-07-21")
@@ -146,12 +157,14 @@ class TestForecastTrailingMean:
     def test_averages_last_7_days(self, seeded_db, tenant):
         base = date(2026, 7, 21)
         for i in range(7):
-            seeded_db.add(DailyActual(
-                tenant_id=tenant.id,
-                series="total_units",
-                actual_date=base - timedelta(days=7 - i),
-                value=Decimal(str(50 + i * 10)),  # 50, 60, 70, 80, 90, 100, 110
-            ))
+            seeded_db.add(
+                DailyActual(
+                    tenant_id=tenant.id,
+                    series="total_units",
+                    actual_date=base - timedelta(days=7 - i),
+                    value=Decimal(str(50 + i * 10)),  # 50, 60, 70, 80, 90, 100, 110
+                )
+            )
         seeded_db.commit()
 
         forecast_trailing_mean(seeded_db, str(tenant.id), "2026-07-21")
@@ -171,19 +184,24 @@ class TestForecastTrailingMean:
 
 class TestComputeForecastMetrics:
     def test_basic_mae_and_bias(self, seeded_db, tenant):
-        seeded_db.add(Forecast(
-            tenant_id=tenant.id,
-            series="total_revenue",
-            target_date=date(2026, 7, 28),
-            model_version="seasonal_naive",
-            point_estimate=Decimal("80.00"),
-        ))
-        seeded_db.add(DailyActual(
-            tenant_id=tenant.id,
-            series="total_revenue",
-            actual_date=date(2026, 7, 28),
-            value=Decimal("100.00"),
-        ))
+        seeded_db.add(
+            Forecast(
+                tenant_id=tenant.id,
+                series="total_revenue",
+                target_date=date(2026, 7, 28),
+                model_version="seasonal_naive",
+                point_estimate=Decimal("80.00"),
+                forecast_date=date(2026, 7, 27)
+            )
+        )
+        seeded_db.add(
+            DailyActual(
+                tenant_id=tenant.id,
+                series="total_revenue",
+                actual_date=date(2026, 7, 28),
+                value=Decimal("100.00"),
+            )
+        )
         seeded_db.commit()
 
         compute_forecast_metrics(seeded_db, str(tenant.id), "2026-07-28")
@@ -199,20 +217,25 @@ class TestComputeForecastMetrics:
         assert metric.bias == Decimal("-20.00")
 
     def test_coverage_true(self, seeded_db, tenant):
-        seeded_db.add(Forecast(
-            tenant_id=tenant.id,
-            series="total_units",
-            target_date=date(2026, 7, 25),
-            model_version="seasonal_naive",
-            point_estimate=Decimal("90.00"),
-            quantile_grid={"p05": 50, "p95": 120},
-        ))
-        seeded_db.add(DailyActual(
-            tenant_id=tenant.id,
-            series="total_units",
-            actual_date=date(2026, 7, 25),
-            value=Decimal("100.00"),
-        ))
+        seeded_db.add(
+            Forecast(
+                tenant_id=tenant.id,
+                series="total_units",
+                target_date=date(2026, 7, 25),
+                model_version="seasonal_naive",
+                point_estimate=Decimal("90.00"),
+                quantile_grid={"p05": 50, "p95": 120},
+                forecast_date=date(2026, 7, 24),
+            )
+        )
+        seeded_db.add(
+            DailyActual(
+                tenant_id=tenant.id,
+                series="total_units",
+                actual_date=date(2026, 7, 25),
+                value=Decimal("100.00"),
+            )
+        )
         seeded_db.commit()
 
         compute_forecast_metrics(seeded_db, str(tenant.id), "2026-07-25")
@@ -226,20 +249,25 @@ class TestComputeForecastMetrics:
         assert metric.coverage is True
 
     def test_coverage_false(self, seeded_db, tenant):
-        seeded_db.add(Forecast(
-            tenant_id=tenant.id,
-            series="total_units",
-            target_date=date(2026, 7, 24),
-            model_version="seasonal_naive",
-            point_estimate=Decimal("90.00"),
-            quantile_grid={"p05": 50, "p95": 80},
-        ))
-        seeded_db.add(DailyActual(
-            tenant_id=tenant.id,
-            series="total_units",
-            actual_date=date(2026, 7, 24),
-            value=Decimal("100.00"),
-        ))
+        seeded_db.add(
+            Forecast(
+                tenant_id=tenant.id,
+                series="total_units",
+                target_date=date(2026, 7, 24),
+                model_version="seasonal_naive",
+                point_estimate=Decimal("90.00"),
+                quantile_grid={"p05": 50, "p95": 80},
+                forecast_date=date(2026, 7, 23),
+            )
+        )
+        seeded_db.add(
+            DailyActual(
+                tenant_id=tenant.id,
+                series="total_units",
+                actual_date=date(2026, 7, 24),
+                value=Decimal("100.00"),
+            )
+        )
         seeded_db.commit()
 
         compute_forecast_metrics(seeded_db, str(tenant.id), "2026-07-24")
@@ -253,19 +281,24 @@ class TestComputeForecastMetrics:
         assert metric.coverage is False
 
     def test_coverage_none_without_grid(self, seeded_db, tenant):
-        seeded_db.add(Forecast(
-            tenant_id=tenant.id,
-            series="total_revenue",
-            target_date=date(2026, 7, 23),
-            model_version="trailing_7d_mean",
-            point_estimate=Decimal("90.00"),
-        ))
-        seeded_db.add(DailyActual(
-            tenant_id=tenant.id,
-            series="total_revenue",
-            actual_date=date(2026, 7, 23),
-            value=Decimal("100.00"),
-        ))
+        seeded_db.add(
+            Forecast(
+                tenant_id=tenant.id,
+                series="total_revenue",
+                target_date=date(2026, 7, 23),
+                model_version="trailing_7d_mean",
+                point_estimate=Decimal("90.00"),
+                forecast_date=date(2026, 7, 22),
+            )
+        )
+        seeded_db.add(
+            DailyActual(
+                tenant_id=tenant.id,
+                series="total_revenue",
+                actual_date=date(2026, 7, 23),
+                value=Decimal("100.00"),
+            )
+        )
         seeded_db.commit()
 
         compute_forecast_metrics(seeded_db, str(tenant.id), "2026-07-23")
@@ -279,13 +312,16 @@ class TestComputeForecastMetrics:
         assert metric.coverage is None
 
     def test_no_actual_skips_metric(self, seeded_db, tenant):
-        seeded_db.add(Forecast(
-            tenant_id=tenant.id,
-            series="total_revenue",
-            target_date=date(2026, 7, 22),
-            model_version="seasonal_naive",
-            point_estimate=Decimal("80.00"),
-        ))
+        seeded_db.add(
+            Forecast(
+                tenant_id=tenant.id,
+                series="total_revenue",
+                target_date=date(2026, 7, 22),
+                model_version="seasonal_naive",
+                point_estimate=Decimal("80.00"),
+                forecast_date=date(2026, 7, 21),
+            )
+        )
         seeded_db.commit()
 
         compute_forecast_metrics(seeded_db, str(tenant.id), "2026-07-22")
