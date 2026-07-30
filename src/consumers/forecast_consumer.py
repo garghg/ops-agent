@@ -11,6 +11,7 @@ from src.schemas.event import ConsumerGroup, EventCategory, SystemEventType
 from src.services.forecast_service import (
     actuals_aggregate,
     compute_forecast_metrics,
+    forecast_glm,
     forecast_seasonal_naive,
     forecast_trailing_mean,
 )
@@ -38,6 +39,7 @@ def process_events(events: list[dict]):
                 actuals_aggregate(session, tenant_id, business_date)
                 forecast_seasonal_naive(session, tenant_id, business_date)
                 forecast_trailing_mean(session, tenant_id, business_date)
+                forecast_glm(session, tenant_id, business_date)
                 compute_forecast_metrics(session, tenant_id, business_date)
 
             publish_event(

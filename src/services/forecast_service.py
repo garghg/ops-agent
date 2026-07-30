@@ -281,35 +281,51 @@ def train_glm(session: Session, tenant_id: str, series: str):
     return model, df.columns.tolist()
 
 
-def forecast_glm(session: Session, tenant_id: str, series: str, as_of_date: str):
-    result = train_glm(session, tenant_id, series)
-    if result is None:
+def forecast_glm(session: Session, tenant_id: str, as_of_date: str):
+    series_lst = session.scalars(
+        select(DailyActual.series)
+        .where(DailyActual.tenant_id == tenant_id)
+        .distinct()
+    ).all()
+    
+    if not series_lst:
         return
-    model, columns = result
+    
     as_of_date = date.fromisoformat(as_of_date)
-
-    for offset in range(1, 15):
-        target_date = as_of_date + timedelta(days=offset)
-        features = build_features(session, tenant_id, str(target_date), "forecast")
-        if features is None:
+    
+    for series in series_lst:
+        result = train_glm(session, tenant_id, series)
+        
+        if result is None:
             continue
-        df = pd.DataFrame([features])
-        df = pd.get_dummies(df, columns=["day_of_week", "month"])
-        df = df.reindex(columns=columns, fill_value=0)
-        prediction = model.predict(df)[0]
-        stmt = insert(Forecast).values(
-            tenant_id=tenant_id,
-            series=series,
-            target_date=target_date,
-            model_version="poisson_glm",
-            point_estimate=prediction,
-        )
+        
+        model, columns = result
 
-        stmt = stmt.on_conflict_do_update(
-            constraint="forecasts_tenant_series_target_model_key",
-            set_={"point_estimate": stmt.excluded.point_estimate},
-        )
+        for offset in range(1, 15):
+            target_date = as_of_date + timedelta(days=offset)
+            features = build_features(session, tenant_id, str(target_date), "forecast")
+            
+            if features is None:
+                continue
+            
+            df = pd.DataFrame([features])
+            df = pd.get_dummies(df, columns=["day_of_week", "month"])
+            df = df.reindex(columns=columns, fill_value=0)
+            prediction = model.predict(df)[0]
+            
+            stmt = insert(Forecast).values(
+                tenant_id=tenant_id,
+                series=series,
+                target_date=target_date,
+                model_version="poisson_glm",
+                point_estimate=prediction,
+            )
 
-        session.execute(stmt)
+            stmt = stmt.on_conflict_do_update(
+                constraint="forecasts_tenant_series_target_model_key",
+                set_={"point_estimate": stmt.excluded.point_estimate},
+            )
 
-    session.commit()
+            session.execute(stmt)
+
+        session.commit()
