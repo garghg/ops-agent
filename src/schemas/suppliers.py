@@ -6,6 +6,5 @@ class POStatus(str, enum.Enum):
     APPROVED = "approved"
     SENT = "sent"
     CONFIRMED = "confirmed"
-    DELIVERED = "delivered"
     RECEIVED = "received"
     CANCELLED = "cancelled"

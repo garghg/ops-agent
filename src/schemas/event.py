@@ -17,6 +17,7 @@ class SystemEventType(str, Enum):
     DAY_OPENED = "day_opened"
     DAY_CLOSED = "day_closed"
     FORECASTS_COMPUTED = "forecasts_computed"
+    PROPOSALS_GENERATED = "proposals_generated"
 
 
 class WorkforceEventType(str, Enum):
@@ -31,12 +32,16 @@ class ConsumerGroup(str, Enum):
     SALES_CONSUMER = "sales_consumer"
     SUMMARY_CONSUMER = "summary_consumer"
     FORECAST_CONSUMER = "forecast_consumer"
+    ORDERING_CONSUMER = "ordering_consumer"
 
 
 class InventoryEventType(str, Enum):
     BELOW_REORDER_POINT = "below_reorder_point"
     BOM_DEPLETION = "bom_depletion"
+    ORDER_RECEIVED = "order_received"
 
 
 class ProcurementEventType(str, Enum):
     PO_APPROVED = "po_approved"
+    PO_CONFIRMED = "po_confirmed"
+    PO_RECEIVED = "po_received"

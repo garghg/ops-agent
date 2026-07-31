@@ -4,12 +4,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.adapters import SenderAdapter
-from src.db.models import EmailOutbox
+from src.db.models import EmailOutbox, POEvent, PurchaseOrder
 from src.schemas.email import EmailStatus
+from src.schemas.orders import OrderBy
+from src.schemas.suppliers import POStatus
 
 
 def process_outbox(session: Session, sender: SenderAdapter, tenant_id: str):
-    
     emails = session.scalars(
         select(EmailOutbox)
         .where(EmailOutbox.tenant_id == tenant_id)
@@ -30,6 +31,22 @@ def process_outbox(session: Session, sender: SenderAdapter, tenant_id: str):
         if is_sent:
             email.status = EmailStatus.SENT.value
             email.sent_at = func.now()
+            if email.purchase_order_id:
+                po = session.scalar(
+                    select(PurchaseOrder)
+                    .where(PurchaseOrder.tenant_id == tenant_id)
+                    .where(PurchaseOrder.id == email.purchase_order_id)
+                )
+                old_status = po.status
+                po.status = POStatus.SENT.value
+                session.add(POEvent(
+                    tenant_id=tenant_id,
+                    purchase_order_id=email.purchase_order_id,
+                    from_status=old_status,
+                    to_status=POStatus.SENT.value,
+                    changed_by=OrderBy.SYSTEM.value,
+                    note="Email sent to supplier"
+                ))
         else:
             email.status = EmailStatus.FAILED.value
         

@@ -1,7 +1,8 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from src.schemas.template import TemplateConfig
+
 from src.db.models import Template, Tenant, TenantConfig
+from src.schemas.template import TemplateConfig
 
 
 def deep_merge(base: dict, overrides: dict) -> dict:

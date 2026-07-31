@@ -39,6 +39,11 @@ class EmailOutbox(Base):
         ForeignKey("tenants.id", ondelete="RESTRICT"),
         nullable=False,
     )
+    purchase_order_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("purchase_orders.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
     idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
     recipient: Mapped[str] = mapped_column(Text, nullable=False)
     subject: Mapped[str] = mapped_column(Text, nullable=False)

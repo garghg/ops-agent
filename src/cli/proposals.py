@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 from math import ceil
 
@@ -5,12 +6,13 @@ import typer
 from rich.console import Console
 from rich.prompt import Prompt
 from rich.table import Table
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from src.cli.context import get_tenant
 from src.db.models import InventoryItem, POEvent, POLine, PurchaseOrder, Supplier
 from src.events.bus import publish_event
-from src.schemas.event import EventCategory, ProcurementEventType
+from src.schemas.event import EventCategory, InventoryEventType, ProcurementEventType
+from src.schemas.inventory import InventoryTransactionType
 from src.schemas.suppliers import POStatus
 
 app = typer.Typer()
@@ -174,9 +176,158 @@ def approve(po_id: str):
         ProcurementEventType.PO_APPROVED.value,
         "2",
         {"purchase_order_id": str(po.id)},
-        str(tenant.id)
+        str(tenant.id),
     )
     console.print("[green]✓ Purchase order approved.[/green]")
+
+
+@app.command()
+def confirm(po_id: str):
+    session, tenant = get_tenant()
+    console = Console()
+
+    po = session.scalar(
+        select(PurchaseOrder)
+        .where(PurchaseOrder.id == po_id)
+        .where(PurchaseOrder.tenant_id == tenant.id)
+    )
+
+    if not po:
+        console.print("[yellow]No Purchase order with given id.[/yellow]")
+        return
+
+    if po.status != POStatus.SENT.value:
+        console.print(
+            f"[red]Cannot confirm -- status is '{po.status}', expected 'sent'.[/red]"
+        )
+        return
+
+    delivery_date = Prompt.ask("Expected delivery date (YYYY-MM-DD)")
+    po.expected_delivery = date.fromisoformat(delivery_date)
+    po.ordered_at = func.now()
+    po.status = POStatus.CONFIRMED.value
+
+    session.add(
+        POEvent(
+            tenant_id=tenant.id,
+            purchase_order_id=po.id,
+            from_status=POStatus.SENT.value,
+            to_status=POStatus.CONFIRMED.value,
+            changed_by="owner",
+            note="Confirmed via CLI",
+        )
+    )
+
+    session.commit()
+    publish_event(
+        EventCategory.PROCUREMENT,
+        ProcurementEventType.PO_CONFIRMED.value,
+        "2",
+        {"purchase_order_id": str(po.id)},
+        str(tenant.id),
+    )
+    console.print("[green]✓ Purchase order confirmed.[/green]")
+
+
+@app.command()
+def receive(po_id: str):
+    session, tenant = get_tenant()
+    console = Console()
+
+    po = session.scalar(
+        select(PurchaseOrder)
+        .where(PurchaseOrder.id == po_id)
+        .where(PurchaseOrder.tenant_id == tenant.id)
+    )
+
+    if not po:
+        console.print("[yellow]No Purchase order with given id.[/yellow]")
+        return
+
+    if po.status != POStatus.CONFIRMED.value:
+        console.print(
+            f"[red]Cannot receive -- status is '{po.status}', expected 'confirmed'.[/red]"
+        )
+        return
+
+    po_lines = session.execute(
+        select(POLine, InventoryItem)
+        .join(InventoryItem, POLine.inventory_item_id == InventoryItem.id)
+        .where(POLine.purchase_order_id == po.id)
+        .where(POLine.tenant_id == tenant.id)
+    ).all()
+
+    if not po_lines:
+        console.print("[yellow]Empty order.[/yellow]")
+        return
+
+    receive_date = Prompt.ask("Delivery date (YYYY-MM-DD)")
+    po.actual_delivery = date.fromisoformat(receive_date)
+
+    discrepancies = []
+    for line, item in po_lines:
+        received = Prompt.ask(
+            f"[cyan]{item.name}[/cyan] (ordered: {line.quantity_ordered} {item.unit}) Received quantity"
+        )
+        line.quantity_received = Decimal(received)
+
+        if line.quantity_received != line.quantity_ordered:
+            discrepancies.append(
+                {
+                    "item": item.name,
+                    "ordered": float(line.quantity_ordered),
+                    "received": float(line.quantity_received),
+                }
+            )
+
+    po.status = POStatus.RECEIVED.value
+
+    session.add(
+        POEvent(
+            tenant_id=tenant.id,
+            purchase_order_id=po.id,
+            from_status=POStatus.CONFIRMED.value,
+            to_status=POStatus.RECEIVED.value,
+            changed_by="owner",
+            note=f"Received via CLI. Discrepancies: {discrepancies}"
+            if discrepancies
+            else "Received via CLI",
+        )
+    )
+
+    session.commit()
+
+    for line, item in po_lines:
+        if line.quantity_received and line.quantity_received > 0:
+            publish_event(
+                EventCategory.INVENTORY,
+                InventoryEventType.ORDER_RECEIVED.value,
+                "2",
+                {
+                    "item_id": str(line.inventory_item_id),
+                    "quantity": float(line.quantity_received),
+                    "transaction_type": InventoryTransactionType.RESTOCK.value,
+                    "note": f"PO {po.id} received",
+                },
+                str(tenant.id),
+            )
+
+    publish_event(
+        EventCategory.PROCUREMENT,
+        ProcurementEventType.PO_RECEIVED.value,
+        "2",
+        {"purchase_order_id": str(po.id)},
+        str(tenant.id),
+    )
+
+    if discrepancies:
+        console.print("[yellow]Discrepancies noted:[/yellow]")
+        for d in discrepancies:
+            console.print(
+                f"  {d['item']}: ordered {d['ordered']}, received {d['received']}"
+            )
+
+    console.print("[green]✓ Purchase order received.[/green]")
 
 
 @app.command()

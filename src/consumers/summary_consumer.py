@@ -38,7 +38,7 @@ log = get_logger(__name__)
 def process_events(events: list[dict]):
     for event in events:
         try:
-            if event["event_type"] != SystemEventType.FORECASTS_COMPUTED.value:
+            if event["event_type"] != SystemEventType.PROPOSALS_GENERATED.value:
                 r.xack(SYSTEM_STREAM, ConsumerGroup.SUMMARY_CONSUMER.value, event["id"])
                 continue
             business_date = event["payload"]["business_date"]

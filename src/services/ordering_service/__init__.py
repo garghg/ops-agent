@@ -1,0 +1,1 @@
+from src.services.ordering_service.proposals import generate_proposals

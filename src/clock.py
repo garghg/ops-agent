@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 _virtual_now: datetime | None = None
 
@@ -6,7 +6,7 @@ _virtual_now: datetime | None = None
 def get_now() -> datetime:
     if _virtual_now is not None:
         return _virtual_now
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def set_virtual_time(dt: datetime) -> None:
