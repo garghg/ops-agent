@@ -1,6 +1,7 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from math import ceil
+from zoneinfo import ZoneInfo
 
 import typer
 from rich.console import Console
@@ -9,10 +10,18 @@ from rich.table import Table
 from sqlalchemy import func, select
 
 from src.cli.context import get_tenant
-from src.db.models import InventoryItem, POEvent, POLine, PurchaseOrder, Supplier
+from src.db.models import (
+    InventoryItem,
+    POEvent,
+    POLine,
+    PurchaseOrder,
+    Supplier,
+    SupplierItem,
+)
 from src.events.bus import publish_event
 from src.schemas.event import EventCategory, InventoryEventType, ProcurementEventType
 from src.schemas.inventory import InventoryTransactionType
+from src.schemas.orders import OrderBy
 from src.schemas.suppliers import POStatus
 
 app = typer.Typer()
@@ -28,7 +37,17 @@ def list():
         select(PurchaseOrder, Supplier)
         .join(Supplier, PurchaseOrder.supplier_id == Supplier.id)
         .where(PurchaseOrder.tenant_id == tenant.id)
-        .where(PurchaseOrder.status.in_([POStatus.APPROVED, POStatus.PROPOSED]))
+        .where(
+            PurchaseOrder.status.in_(
+                [
+                    POStatus.APPROVED,
+                    POStatus.PROPOSED,
+                    POStatus.SENT,
+                    POStatus.CONFIRMED,
+                    POStatus.RECEIVED,
+                ]
+            )
+        )
     ).all()
 
     if not po_with_suppliers:
@@ -137,6 +156,227 @@ def show(po_id: str):
 
 
 @app.command()
+def create(supplier_id: str):
+    session, tenant = get_tenant()
+    console = Console()
+
+    supplier = session.scalar(
+        select(Supplier)
+        .where(Supplier.id == supplier_id)
+        .where(Supplier.tenant_id == tenant.id)
+        .where(Supplier.is_active.is_(True))
+    )
+
+    if not supplier:
+        console.print("[yellow]No active supplier with given id.[/yellow]")
+        return
+
+    supplier_items = session.execute(
+        select(SupplierItem, InventoryItem)
+        .join(InventoryItem, SupplierItem.inventory_item_id == InventoryItem.id)
+        .where(SupplierItem.supplier_id == supplier.id)
+        .where(SupplierItem.tenant_id == tenant.id)
+    ).all()
+
+    if not supplier_items:
+        console.print("[yellow]No items linked to this supplier.[/yellow]")
+        return
+
+    lines = []
+    for si, item in supplier_items:
+        qty = Prompt.ask(
+            f"[cyan]{item.name}[/cyan] (on hand: {item.quantity_on_hand} {item.unit}, "
+            f"pack size: {si.pack_size}, cost: ${si.cost_per_unit:.2f}) Quantity [enter to skip]"
+        )
+        if not qty:
+            continue
+
+        quantity_ordered = ceil(Decimal(qty) / si.pack_size) * si.pack_size
+
+        lines.append(
+            {
+                "inventory_item_id": item.id,
+                "supplier_item_id": si.id,
+                "quantity_ordered": quantity_ordered,
+                "unit_cost": si.cost_per_unit,
+            }
+        )
+
+    if not lines:
+        console.print("[yellow]No items selected — order cancelled.[/yellow]")
+        return
+
+    delivery_date = Prompt.ask("Expected delivery date (YYYY-MM-DD)")
+
+    total_value = sum(l["quantity_ordered"] * l["unit_cost"] for l in lines)
+
+    po = PurchaseOrder(
+        tenant_id=tenant.id,
+        supplier_id=supplier.id,
+        status=POStatus.CONFIRMED.value,
+        total_value=total_value,
+        ordered_at=func.now(),
+        expected_delivery=date.fromisoformat(delivery_date),
+        created_by=OrderBy.OWNER.value,
+    )
+    session.add(po)
+    session.flush()
+
+    for l in lines:
+        session.add(
+            POLine(
+                tenant_id=tenant.id,
+                purchase_order_id=po.id,
+                inventory_item_id=l["inventory_item_id"],
+                supplier_item_id=l["supplier_item_id"],
+                quantity_ordered=l["quantity_ordered"],
+                unit_cost=l["unit_cost"],
+            )
+        )
+
+    session.add(
+        POEvent(
+            tenant_id=tenant.id,
+            purchase_order_id=po.id,
+            from_status=None,
+            to_status=POStatus.CONFIRMED.value,
+            changed_by=OrderBy.OWNER.value,
+            note="Manual order created via CLI",
+        )
+    )
+
+    session.commit()
+    console.print(f"[green]✓ Purchase order created. Total: ${total_value:.2f}[/green]")
+
+
+@app.command()
+def receive_standing(supplier_id: str):
+    session, tenant = get_tenant()
+    console = Console()
+
+    supplier = session.scalar(
+        select(Supplier)
+        .where(Supplier.id == supplier_id)
+        .where(Supplier.tenant_id == tenant.id)
+        .where(Supplier.is_active.is_(True))
+    )
+
+    if not supplier:
+        console.print("[yellow]No active supplier with given id.[/yellow]")
+        return
+
+    if not supplier.delivery_days:
+        console.print("[red]This supplier has no standing delivery schedule.[/red]")
+        return
+
+    supplier_items = session.execute(
+        select(SupplierItem, InventoryItem)
+        .join(InventoryItem, SupplierItem.inventory_item_id == InventoryItem.id)
+        .where(SupplierItem.supplier_id == supplier.id)
+        .where(SupplierItem.tenant_id == tenant.id)
+    ).all()
+
+    if not supplier_items:
+        console.print("[yellow]No items linked to this supplier.[/yellow]")
+        return
+
+    receive_date = Prompt.ask("Delivery date (YYYY-MM-DD)")
+
+    lines = []
+    for si, item in supplier_items:
+        default = si.default_quantity if si.default_quantity else ""
+        while True:
+            received = Prompt.ask(
+                f"[cyan]{item.name}[/cyan] (expected: {default} {item.unit}) Received quantity [enter to skip / d for default]",
+                default=str(default) if default else "",
+            )
+            if not received:
+                break
+            if received == "d":
+                if not default:
+                    console.print(
+                        f"[red]No default quantity set for {item.name}.[/red]"
+                    )
+                    continue
+                received = default
+            break
+
+        quantity = Decimal(received)
+        if quantity <= 0:
+            continue
+
+        lines.append(
+            {
+                "inventory_item_id": item.id,
+                "supplier_item_id": si.id,
+                "quantity": quantity,
+                "unit_cost": si.cost_per_unit,
+            }
+        )
+
+    if not lines:
+        console.print("[yellow]No items received — nothing recorded.[/yellow]")
+        return
+
+    total_value = sum(l["quantity"] * l["unit_cost"] for l in lines)
+
+    po = PurchaseOrder(
+        tenant_id=tenant.id,
+        supplier_id=supplier.id,
+        status=POStatus.RECEIVED.value,
+        total_value=total_value,
+        actual_delivery=date.fromisoformat(receive_date),
+        created_by=OrderBy.OWNER.value,
+    )
+    session.add(po)
+    session.flush()
+
+    for l in lines:
+        session.add(
+            POLine(
+                tenant_id=tenant.id,
+                purchase_order_id=po.id,
+                inventory_item_id=l["inventory_item_id"],
+                supplier_item_id=l["supplier_item_id"],
+                quantity_ordered=l["quantity"],
+                quantity_received=l["quantity"],
+                unit_cost=l["unit_cost"],
+            )
+        )
+
+    session.add(
+        POEvent(
+            tenant_id=tenant.id,
+            purchase_order_id=po.id,
+            from_status=None,
+            to_status=POStatus.RECEIVED.value,
+            changed_by="owner",
+            note="Standing delivery received via CLI",
+        )
+    )
+
+    session.commit()
+
+    for l in lines:
+        publish_event(
+            EventCategory.INVENTORY,
+            InventoryEventType.ORDER_RECEIVED.value,
+            "2",
+            {
+                "item_id": str(l["inventory_item_id"]),
+                "quantity": float(l["quantity"]),
+                "transaction_type": InventoryTransactionType.RESTOCK.value,
+                "note": f"Standing delivery from {supplier.name}",
+            },
+            str(tenant.id),
+        )
+
+    console.print(
+        f"[green]✓ Standing delivery recorded. Total: ${total_value:.2f}[/green]"
+    )
+
+
+@app.command()
 def approve(po_id: str):
     session, tenant = get_tenant()
     console = Console()
@@ -205,6 +445,8 @@ def confirm(po_id: str):
     delivery_date = Prompt.ask("Expected delivery date (YYYY-MM-DD)")
     po.expected_delivery = date.fromisoformat(delivery_date)
     po.ordered_at = func.now()
+    today = datetime.now(ZoneInfo(tenant.timezone)).date()
+    po.lead_time_days = po.expected_delivery - today
     po.status = POStatus.CONFIRMED.value
 
     session.add(
