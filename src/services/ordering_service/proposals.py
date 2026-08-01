@@ -63,6 +63,7 @@ def generate_proposals(session: Session, tenant_id, item_ids: list[str]) -> list
         .where(SupplierItem.tenant_id == tenant_id)
         .where(SupplierItem.inventory_item_id.in_(low_item_ids))
         .where(Supplier.is_active == True)
+        .where(Supplier.delivery_days.is_(None))
     ).all()
 
     supplier_ids = {si.supplier_id for si in supplier_items}

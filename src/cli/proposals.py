@@ -350,7 +350,7 @@ def receive_standing(supplier_id: str):
             purchase_order_id=po.id,
             from_status=None,
             to_status=POStatus.RECEIVED.value,
-            changed_by="owner",
+            changed_by=OrderBy.OWNER.value,
             note="Standing delivery received via CLI",
         )
     )
