@@ -1,6 +1,5 @@
 from datetime import date, timedelta
 from decimal import Decimal
-from statistics import mean
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select

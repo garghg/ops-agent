@@ -442,11 +442,37 @@ def confirm(po_id: str):
         )
         return
 
+    po_lines = session.execute(
+        select(POLine, InventoryItem)
+        .join(InventoryItem, POLine.inventory_item_id == InventoryItem.id)
+        .where(POLine.purchase_order_id == po.id)
+        .where(POLine.tenant_id == tenant.id)
+    ).all()
+
     delivery_date = Prompt.ask("Expected delivery date (YYYY-MM-DD)")
     po.expected_delivery = date.fromisoformat(delivery_date)
     po.ordered_at = func.now()
-    today = datetime.now(ZoneInfo(tenant.timezone)).date()
-    po.lead_time_days = po.expected_delivery - today
+
+    edits = []
+    for line, item in po_lines:
+        new_qty = Prompt.ask(
+            f"[cyan]{item.name}[/cyan] (ordered: {line.quantity_ordered} {item.unit}) "
+            f"New quantity [enter to keep]"
+        )
+        if new_qty:
+            original = line.quantity_ordered
+            line.quantity_ordered = Decimal(new_qty)
+            edits.append(
+                {"item": item.name, "from": float(original), "to": float(new_qty)}
+            )
+
+    all_lines = session.scalars(
+        select(POLine)
+        .where(POLine.purchase_order_id == po.id)
+        .where(POLine.tenant_id == tenant.id)
+    ).all()
+    po.total_value = sum(l.quantity_ordered * l.unit_cost for l in all_lines)
+
     po.status = POStatus.CONFIRMED.value
 
     session.add(
@@ -456,7 +482,7 @@ def confirm(po_id: str):
             from_status=POStatus.SENT.value,
             to_status=POStatus.CONFIRMED.value,
             changed_by="owner",
-            note="Confirmed via CLI",
+            note=f"Confirmed via CLI. Edits: {edits}" if edits else "Confirmed via CLI",
         )
     )
 
@@ -468,7 +494,9 @@ def confirm(po_id: str):
         {"purchase_order_id": str(po.id)},
         str(tenant.id),
     )
-    console.print("[green]✓ Purchase order confirmed.[/green]")
+    console.print(
+        f"[green]✓ Purchase order confirmed. Total: ${po.total_value:.2f}[/green]"
+    )
 
 
 @app.command()

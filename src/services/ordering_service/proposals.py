@@ -3,7 +3,7 @@ from collections import defaultdict
 from decimal import Decimal
 from math import ceil
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.db.models import (
@@ -13,12 +13,16 @@ from src.db.models import (
     PurchaseOrder,
     Supplier,
     SupplierItem,
+    Tenant,
 )
 from src.schemas.orders import OrderBy
 from src.schemas.suppliers import POStatus
+from src.services.ordering_service import horizon_aggregate, protection_horizon
 
 
-def generate_proposals(session: Session, tenant_id, item_ids: list[str]) -> list[PurchaseOrder]:
+def generate_proposals(
+    session: Session, tenant_id, item_ids: list[str]
+) -> list[PurchaseOrder]:
     po_placed = session.execute(
         select(POLine, PurchaseOrder)
         .join(PurchaseOrder, POLine.purchase_order_id == PurchaseOrder.id)
@@ -57,6 +61,19 @@ def generate_proposals(session: Session, tenant_id, item_ids: list[str]) -> list
     low_item_ids = [item.id for item in low_items]
     item_map = {item.id: item for item in low_items}
 
+    sent_orders = session.execute(
+        select(
+            POLine.inventory_item_id,
+            func.coalesce(func.sum(POLine.quantity_ordered), 0).label("total_quantity"),
+        )
+        .join(PurchaseOrder, POLine.purchase_order_id == PurchaseOrder.id)
+        .where(POLine.tenant_id == tenant_id)
+        .where(PurchaseOrder.status.in_([POStatus.SENT, POStatus.CONFIRMED]))
+        .group_by(POLine.inventory_item_id)
+    ).all()
+
+    sent_orders_map = {item_id: total for item_id, total in sent_orders}
+
     supplier_items = session.scalars(
         select(SupplierItem)
         .join(Supplier, Supplier.id == SupplierItem.supplier_id)
@@ -72,6 +89,7 @@ def generate_proposals(session: Session, tenant_id, item_ids: list[str]) -> list
         .where(Supplier.id.in_(supplier_ids))
         .where(Supplier.tenant_id == tenant_id)
     ).all()
+
     supplier_map = {s.id: s for s in suppliers}
 
     if not supplier_items:
@@ -92,8 +110,23 @@ def generate_proposals(session: Session, tenant_id, item_ids: list[str]) -> list
         supplier_groups[si.supplier_id].append(si)
 
     processed_pos = []
+    timezone = session.scalar(select(Tenant.timezone).where(Tenant.id == tenant_id))
     for supplier_id, items in supplier_groups.items():
         po = existing_pos.get(supplier_id)
+
+        supplier = supplier_map[supplier_id]
+
+        if not supplier or not timezone:
+            continue
+
+        dates = protection_horizon(
+            supplier.lead_time_days, supplier.order_cutoff_hours, timezone
+        )
+
+        if not dates:
+            continue
+
+        start_date, end_date = dates
 
         if po is None:
             po = PurchaseOrder(
@@ -109,17 +142,24 @@ def generate_proposals(session: Session, tenant_id, item_ids: list[str]) -> list
         for si in items:
             inv_item = item_map[si.inventory_item_id]
             existing_line = existing_lines.get(si.inventory_item_id)
+            position = inv_item.quantity_on_hand + sent_orders_map.get(inv_item.id, Decimal(0))
+            shortfall = inv_item.target_quantity - position
+
+            aggregates = horizon_aggregate(
+                session, str(inv_item.id), tenant_id, start_date, end_date
+            )
+
+            if aggregates:
+                _, aggregate_qg = aggregates
+                s = aggregate_qg["p95"]
+                shortfall = s - position
 
             quantity_ordered = max(
                 0,
-                ceil(
-                    (inv_item.target_quantity - inv_item.quantity_on_hand)
-                    / si.pack_size
-                )
-                * si.pack_size,
+                ceil((shortfall) / si.pack_size) * si.pack_size,
             )
             unit_cost = si.cost_per_unit
-            
+
             if quantity_ordered == 0:
                 continue
 
@@ -192,7 +232,7 @@ def generate_proposals(session: Session, tenant_id, item_ids: list[str]) -> list
             ]
         else:
             po.suggested_topups = None
-        
+
         processed_pos.append(po)
 
     session.commit()
