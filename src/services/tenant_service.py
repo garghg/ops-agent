@@ -1,9 +1,11 @@
 import re
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from src.schemas.tenant import ShopType
-from src.db.models import Tenant
 from tzlocal import get_localzone
+
+from src.db.models import Tenant
+from src.schemas.tenant import ShopType
 from src.services.weather_service import geocode
 
 

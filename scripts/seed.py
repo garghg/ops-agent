@@ -161,24 +161,24 @@ SEED_SUPPLIERS = [
         "name": "Dairy Farms Co-op",
         "email": "orders@dairyfarmscoop.com",
         "lead_time_days": 2,
-        "delivery_days": [1, 3, 5],  # Tue, Thu, Sat
-        "order_cutoff_hours": 24,
+        "delivery_days": None,
+        "order_cutoff_hours": 15,
         "minimum_order_value": Decimal("50.00"),
     },
     {
         "name": "Sunrise Bakery Supply",
         "email": "orders@sunrisebakery.com",
         "lead_time_days": 3,
-        "delivery_days": [1, 4],  # Tue, Fri
-        "order_cutoff_hours": 48,
+        "delivery_days": None,
+        "order_cutoff_hours": 16,
         "minimum_order_value": Decimal("75.00"),
     },
     {
         "name": "Sweet Toppings Inc",
         "email": "sales@sweettoppings.com",
         "lead_time_days": 5,
-        "delivery_days": [2],  # Wed
-        "order_cutoff_hours": 72,
+        "delivery_days": None,
+        "order_cutoff_hours": 18,
         "minimum_order_value": Decimal("40.00"),
     },
 ]

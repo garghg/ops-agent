@@ -74,16 +74,15 @@ def generate_proposals(
 
     sent_orders_map = {item_id: total for item_id, total in sent_orders}
 
-    supplier_items = session.scalars(
+    all_supplier_items = session.scalars(
         select(SupplierItem)
         .join(Supplier, Supplier.id == SupplierItem.supplier_id)
         .where(SupplierItem.tenant_id == tenant_id)
         .where(SupplierItem.inventory_item_id.in_(low_item_ids))
         .where(Supplier.is_active == True)
-        .where(Supplier.delivery_days.is_(None))
     ).all()
 
-    supplier_ids = {si.supplier_id for si in supplier_items}
+    supplier_ids = {si.supplier_id for si in all_supplier_items}
     suppliers = session.scalars(
         select(Supplier)
         .where(Supplier.id.in_(supplier_ids))
@@ -91,6 +90,10 @@ def generate_proposals(
     ).all()
 
     supplier_map = {s.id: s for s in suppliers}
+    supplier_items = [
+        si for si in all_supplier_items
+        if not supplier_map[si.supplier_id].delivery_days
+    ]
 
     if not supplier_items:
         return []
@@ -142,7 +145,9 @@ def generate_proposals(
         for si in items:
             inv_item = item_map[si.inventory_item_id]
             existing_line = existing_lines.get(si.inventory_item_id)
-            position = inv_item.quantity_on_hand + sent_orders_map.get(inv_item.id, Decimal(0))
+            position = inv_item.quantity_on_hand + sent_orders_map.get(
+                inv_item.id, Decimal(0)
+            )
             shortfall = inv_item.target_quantity - position
 
             aggregates = horizon_aggregate(
