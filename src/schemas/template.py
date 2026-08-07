@@ -17,7 +17,18 @@ class AlertThresholds(BaseModel):
     refund_rate: float = 0.05
     discount_rate: float = 0.10
 
+
+class OrderingConfig(BaseModel):
+    default_service_level: float = 0.95
+    category_service_levels: dict[str, float] = {}
+    max_order_value: float = 500.0
+    max_daily_spend: float = 1500.0
+    max_weekly_spend: float = 5000.0
+    novelty_threshold: float = 1.5
+
+
 class TemplateConfig(BaseModel):
     schedule: ScheduleConfig = ScheduleConfig()
     alerts: AlertThresholds = AlertThresholds()
+    ordering: OrderingConfig = OrderingConfig()
     model_config = ConfigDict(extra="forbid")

@@ -1,3 +1,9 @@
+from src.db.models.autonomy import (
+    AutonomyEvent,
+    CapabilityState,
+    DecisionLog,
+    SpendLedger,
+)
 from src.db.models.base import Base
 from src.db.models.catalog import BOMLine, CatalogItem, CatalogModifier, MappingGap
 from src.db.models.comms import EmailOutbox
