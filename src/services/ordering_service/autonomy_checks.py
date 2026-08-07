@@ -19,7 +19,7 @@ def autonomy_checks(
     supplier: Supplier,
     state: str,
 ) -> bool:
-    config = resolve_config()
+    config = resolve_config(tenant_id, session)
     today = datetime.now(ZoneInfo(timezone)).date()
     this_monday = today - timedelta(days=today.weekday())
 

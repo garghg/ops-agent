@@ -134,7 +134,7 @@ def generate_proposals(
             .where(CapabilityState.supplier_id == supplier_id)
         )
 
-        config = resolve_config()
+        config = resolve_config(tenant_id, session)
 
         po = existing_pos.get(supplier_id)
 
@@ -180,7 +180,7 @@ def generate_proposals(
             )
 
             if aggregates:
-                qk = config.ordering.default_service_level
+                qk = f"p{int(config.ordering.default_service_level * 100)}"
                 aggregate_pe, aggregate_qg = aggregates
                 s = aggregate_qg[qk]
                 shortfall = s - position
