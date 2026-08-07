@@ -1,9 +1,10 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     CheckConstraint,
+    Date,
     ForeignKey,
     Numeric,
     Text,
@@ -106,6 +107,7 @@ class SpendLedger(Base):
         nullable=False,
     )
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    business_date: Mapped[date] = mapped_column(Date, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )

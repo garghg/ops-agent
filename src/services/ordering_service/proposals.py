@@ -1,22 +1,31 @@
 import uuid
 from collections import defaultdict
+from datetime import datetime, timedelta
 from decimal import Decimal
 from math import ceil
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.db.models import (
+    CapabilityState,
+    DecisionLog,
     InventoryItem,
     POEvent,
     POLine,
     PurchaseOrder,
+    SpendLedger,
     Supplier,
     SupplierItem,
     Tenant,
 )
-from src.schemas.orders import OrderBy
+from src.events.bus import publish_event
+from src.schemas.autonomy import AutonomyState
+from src.schemas.event import EventCategory, ProcurementEventType
+from src.schemas.orders import OrderBy, PredictionMode
 from src.schemas.suppliers import POStatus
+from src.services.config_services import resolve_config
 from src.services.ordering_service import horizon_aggregate, protection_horizon
 
 
@@ -91,7 +100,8 @@ def generate_proposals(
 
     supplier_map = {s.id: s for s in suppliers}
     supplier_items = [
-        si for si in all_supplier_items
+        si
+        for si in all_supplier_items
         if not supplier_map[si.supplier_id].delivery_days
     ]
 
@@ -113,8 +123,19 @@ def generate_proposals(
         supplier_groups[si.supplier_id].append(si)
 
     processed_pos = []
+
     timezone = session.scalar(select(Tenant.timezone).where(Tenant.id == tenant_id))
+    events_to_publish = []
+
     for supplier_id, items in supplier_groups.items():
+        state = session.scalar(
+            select(CapabilityState.state)
+            .where(CapabilityState.tenant_id == tenant_id)
+            .where(CapabilityState.supplier_id == supplier_id)
+        )
+
+        config = resolve_config()
+
         po = existing_pos.get(supplier_id)
 
         supplier = supplier_map[supplier_id]
@@ -149,15 +170,21 @@ def generate_proposals(
                 inv_item.id, Decimal(0)
             )
             shortfall = inv_item.target_quantity - position
+            mode = PredictionMode.PAR.value
+            aggregate_pe = None
+            aggregate_qg = None
+            qk = None
 
             aggregates = horizon_aggregate(
                 session, str(inv_item.id), tenant_id, start_date, end_date
             )
 
             if aggregates:
-                _, aggregate_qg = aggregates
-                s = aggregate_qg["p95"]
+                qk = config.ordering.default_service_level
+                aggregate_pe, aggregate_qg = aggregates
+                s = aggregate_qg[qk]
                 shortfall = s - position
+                mode = PredictionMode.FORECAST.value
 
             quantity_ordered = max(
                 0,
@@ -167,6 +194,41 @@ def generate_proposals(
 
             if quantity_ordered == 0:
                 continue
+
+            snapshot = {
+                "mode": mode,
+                "quantity_on_hand": float(inv_item.quantity_on_hand),
+                "on_order": float(sent_orders_map.get(inv_item.id, Decimal(0))),
+                "position": float(position),
+                "shortfall": float(shortfall),
+                "quantity_ordered": float(quantity_ordered),
+                "pack_size": float(si.pack_size),
+                "unit_cost": float(unit_cost),
+                "protection_horizon": {
+                    "start": start_date.isoformat(),
+                    "end": end_date.isoformat(),
+                },
+                "quantile_key": qk,
+                "aggregate_demand": float(aggregate_pe)
+                if aggregate_pe is not None
+                else None,
+                "quantile_grid": {k: float(v) for k, v in aggregate_qg.items()}
+                if aggregate_qg
+                else None,
+                "target_quantity": float(inv_item.target_quantity)
+                if qk is None
+                else None,
+            }
+
+            session.add(
+                DecisionLog(
+                    tenant_id=tenant_id,
+                    purchase_order_id=po.id,
+                    inventory_item_id=si.inventory_item_id,
+                    supplier_id=si.supplier_id,
+                    snapshot=snapshot,
+                )
+            )
 
             if existing_line:
                 existing_line.quantity_ordered = quantity_ordered
@@ -238,7 +300,80 @@ def generate_proposals(
         else:
             po.suggested_topups = None
 
+        if state and state == AutonomyState.AUTO_WITHIN_BOUNDS.value:
+            today = datetime.now(ZoneInfo(timezone)).date()
+            this_monday = today - timedelta(days=today.weekday())
+
+            daily_spend = session.scalar(
+                select(func.coalesce(func.sum(SpendLedger.amount), Decimal(0)))
+                .where(SpendLedger.tenant_id == tenant_id)
+                .where(SpendLedger.business_date == today)
+            ) or Decimal(0)
+
+            weekly_spend = session.scalar(
+                select(func.coalesce(func.sum(SpendLedger.amount), Decimal(0)))
+                .where(SpendLedger.tenant_id == tenant_id)
+                .where(SpendLedger.business_date >= this_monday)
+            ) or Decimal(0)
+
+            avg_order_value = session.scalar(
+                select(func.avg(PurchaseOrder.total_value))
+                .where(PurchaseOrder.tenant_id == tenant_id)
+                .where(PurchaseOrder.supplier_id == supplier_id)
+                .where(
+                    PurchaseOrder.status.in_(
+                        [POStatus.SENT, POStatus.CONFIRMED, POStatus.RECEIVED]
+                    )
+                )
+            )
+
+            valid_order = po.total_value <= config.ordering.max_order_value
+            valid_daily = (
+                daily_spend + po.total_value
+            ) <= config.ordering.max_daily_spend
+            valid_weekly = (
+                weekly_spend + po.total_value
+            ) <= config.ordering.max_weekly_spend
+            valid_novelty = (
+                avg_order_value is not None
+                and po.total_value
+                <= avg_order_value * Decimal(str(config.ordering.novelty_threshold))
+            )
+            valid_minimum = (
+                not supplier.minimum_order_value
+                or po.total_value >= supplier.minimum_order_value
+            )
+
+            all_passed = all(
+                [valid_order, valid_daily, valid_weekly, valid_novelty, valid_minimum]
+            )
+
+            if all_passed:
+                po.status = POStatus.APPROVED.value
+                session.add(
+                    POEvent(
+                        tenant_id=tenant_id,
+                        purchase_order_id=po.id,
+                        from_status=POStatus.PROPOSED.value,
+                        to_status=POStatus.APPROVED.value,
+                        changed_by=OrderBy.SYSTEM.value,
+                        note="Auto-approved within autonomy bounds",
+                    )
+                )
+
+                events_to_publish.append(
+                    {"purchase_order_id": str(po.id), "tenant_id": tenant_id}
+                )
+
         processed_pos.append(po)
 
     session.commit()
+    for evt in events_to_publish:
+        publish_event(
+            EventCategory.PROCUREMENT,
+            ProcurementEventType.PO_APPROVED.value,
+            "2",
+            {"purchase_order_id": evt["purchase_order_id"]},
+            evt["tenant_id"],
+        )
     return processed_pos
