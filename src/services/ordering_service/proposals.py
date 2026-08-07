@@ -318,7 +318,7 @@ def generate_proposals(
             events_to_publish.append(
                 {
                     "purchase_order_id": str(po.id),
-                    "tenant_id": tenant_id,
+                    "tenant_id": str(tenant_id),
                     "changed_by": OrderBy.SYSTEM.value,
                 }
             )
