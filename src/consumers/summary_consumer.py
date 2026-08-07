@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from src.config import CLAIM_INTERVAL_SECONDS
 from src.consumers.utils import CONSUMER_NAME
 from src.db.models import (
+    AutonomyEvent,
     EmailOutbox,
     InventoryItem,
     PurchaseOrder,
@@ -22,6 +23,7 @@ from src.db.models import (
 from src.db.session import SessionLocal
 from src.events.bus import claim_pending_events, r, read_event
 from src.logging import get_logger, setup_logging
+from src.schemas.autonomy import AutonomyEventType
 from src.schemas.email import EmailStatus
 from src.schemas.event import ConsumerGroup, EventCategory, SystemEventType
 from src.schemas.sale import SaleTransactionType
@@ -108,6 +110,15 @@ def process_events(events: list[dict]):
                 
                 config = resolve_config(str(tenant.id), session)
                 alerts = check_financial_alerts(sales_summary, config.alerts)
+                
+                executor_rejections = session.execute(
+                    select(AutonomyEvent, Supplier.name)
+                    .join(Supplier, AutonomyEvent.supplier_id == Supplier.id)
+                    .where(AutonomyEvent.tenant_id == tenant_id)
+                    .where(AutonomyEvent.event_type == AutonomyEventType.EXECUTOR_REJECTED.value)
+                    .where(AutonomyEvent.created_at >= day_start)
+                    .where(AutonomyEvent.created_at < day_end)
+                ).all()
 
                 html = template.render(
                     tenant=tenant,
@@ -117,6 +128,7 @@ def process_events(events: list[dict]):
                     pending_proposals=pending_proposals,
                     stale_consumers=stale,
                     alerts=alerts,
+                    executor_rejections=executor_rejections,
                 )
                 
                 session.add(EmailOutbox(

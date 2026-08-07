@@ -405,7 +405,7 @@ def approve(po_id: str):
             purchase_order_id=po.id,
             from_status=POStatus.PROPOSED.value,
             to_status=POStatus.APPROVED.value,
-            changed_by="owner",
+            changed_by=OrderBy.OWNER.value,
             note="Approved via CLI",
         )
     )
@@ -415,7 +415,7 @@ def approve(po_id: str):
         EventCategory.PROCUREMENT,
         ProcurementEventType.PO_APPROVED.value,
         "2",
-        {"purchase_order_id": str(po.id)},
+        {"purchase_order_id": str(po.id), "changed_by": OrderBy.OWNER.value},
         str(tenant.id),
     )
     console.print("[green]✓ Purchase order approved.[/green]")
@@ -481,7 +481,7 @@ def confirm(po_id: str):
             purchase_order_id=po.id,
             from_status=POStatus.SENT.value,
             to_status=POStatus.CONFIRMED.value,
-            changed_by="owner",
+            changed_by=OrderBy.OWNER.value,
             note=f"Confirmed via CLI. Edits: {edits}" if edits else "Confirmed via CLI",
         )
     )
@@ -558,7 +558,7 @@ def receive(po_id: str):
             purchase_order_id=po.id,
             from_status=POStatus.CONFIRMED.value,
             to_status=POStatus.RECEIVED.value,
-            changed_by="owner",
+            changed_by=OrderBy.OWNER.value,
             note=f"Received via CLI. Discrepancies: {discrepancies}"
             if discrepancies
             else "Received via CLI",
@@ -628,7 +628,7 @@ def reject(po_id: str):
             purchase_order_id=po.id,
             from_status=old_status,
             to_status=POStatus.CANCELLED.value,
-            changed_by="owner",
+            changed_by=OrderBy.OWNER.value,
             note="Rejected via CLI",
         )
     )
@@ -683,7 +683,7 @@ def edit(po_id: str):
                 purchase_order_id=po.id,
                 from_status=old_status,
                 to_status=POStatus.CANCELLED.value,
-                changed_by="owner",
+                changed_by=OrderBy.OWNER.value,
                 note="Cancelled during edit",
             )
         )
@@ -757,7 +757,7 @@ def edit(po_id: str):
                 purchase_order_id=po.id,
                 from_status=POStatus.PROPOSED.value,
                 to_status=POStatus.CANCELLED.value,
-                changed_by="owner",
+                changed_by=OrderBy.OWNER.value,
                 note="All lines removed during edit",
             )
         )
@@ -773,7 +773,7 @@ def edit(po_id: str):
             purchase_order_id=po.id,
             from_status=POStatus.PROPOSED.value,
             to_status=POStatus.PROPOSED.value,
-            changed_by="owner",
+            changed_by=OrderBy.OWNER.value,
             note=f"Edited via CLI: {edits}",
         )
     )

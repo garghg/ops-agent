@@ -52,6 +52,22 @@
 <p>No alerts.</p>
 {% endif %}
 
+<h2>Executor Rejections</h2>
+{% if executor_rejections %}
+<table>
+  <tr><th>Supplier</th><th>Reason</th><th>Time</th></tr>
+  {% for rejection, supplier_name in executor_rejections %}
+  <tr>
+    <td>{{ supplier_name }}</td>
+    <td>{{ rejection.reason }}</td>
+    <td>{{ rejection.created_at.strftime('%H:%M') }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>No executor rejections.</p>
+{% endif %}
+
 <h2>System Health</h2>
 {% if stale_consumers %}
 <p>Stale consumers: {{ stale_consumers | join(", ") }}</p>

@@ -1,5 +1,7 @@
 import json
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import redis
 from jinja2 import Environment, FileSystemLoader
@@ -8,19 +10,27 @@ from sqlalchemy import select
 from src.config import CLAIM_INTERVAL_SECONDS
 from src.consumers.utils import CONSUMER_NAME
 from src.db.models import (
+    AutonomyEvent,
+    CapabilityState,
     EmailOutbox,
     InventoryItem,
+    POEvent,
     POLine,
     PurchaseOrder,
+    SpendLedger,
     Supplier,
     Tenant,
 )
 from src.db.session import SessionLocal
 from src.events.bus import claim_pending_events, r, read_event
 from src.logging import get_logger, setup_logging
+from src.schemas.autonomy import AutonomyEventType, AutonomyState
 from src.schemas.email import EmailStatus
 from src.schemas.event import ConsumerGroup, EventCategory, ProcurementEventType
+from src.schemas.orders import OrderBy
+from src.schemas.suppliers import POStatus
 from src.services.health_service import record_heartbeat
+from src.services.ordering_service import autonomy_checks
 
 EMAIL_STREAM = f"{EventCategory.PROCUREMENT.value}_events"
 log = get_logger(__name__)
@@ -44,6 +54,12 @@ def process_events(events: list[dict]) -> None:
 
         try:
             with SessionLocal() as session:
+                changed_by = data["changed_by"]
+
+                timezone = session.scalar(
+                    select(Tenant.timezone).where(Tenant.id == tenant_id)
+                )
+
                 result = session.execute(
                     select(PurchaseOrder, Supplier)
                     .join(Supplier, PurchaseOrder.supplier_id == Supplier.id)
@@ -52,6 +68,48 @@ def process_events(events: list[dict]) -> None:
                 ).first()
 
                 po, supplier = result
+
+                state = session.scalar(
+                    select(CapabilityState.state)
+                    .where(CapabilityState.tenant_id == tenant_id)
+                    .where(CapabilityState.supplier_id == supplier.id)
+                )
+
+                if changed_by == OrderBy.SYSTEM.value and not autonomy_checks(
+                    session, timezone, tenant_id, po, supplier, state
+                ):
+                    po.status = POStatus.PROPOSED.value
+                    session.add(
+                        POEvent(
+                            tenant_id=tenant_id,
+                            purchase_order_id=po.id,
+                            from_status=POStatus.APPROVED.value,
+                            to_status=POStatus.PROPOSED.value,
+                            changed_by=OrderBy.SYSTEM.value,
+                            note="Executor rejected: autonomy bounds failed re-check",
+                        )
+                    )
+                    session.add(
+                        AutonomyEvent(
+                            tenant_id=tenant_id,
+                            supplier_id=supplier.id,
+                            event_type=AutonomyEventType.EXECUTOR_REJECTED.value,
+                            from_state=AutonomyState.AUTO_WITHIN_BOUNDS.value,
+                            to_state=AutonomyState.AUTO_WITHIN_BOUNDS.value,
+                            reason="Autonomy bounds failed re-check at executor",
+                        )
+                    )
+                    log.warning(
+                        "executor_rejected_auto_approval",
+                        purchase_order_id=str(po.id),
+                        supplier_id=str(supplier.id),
+                        tenant_id=str(tenant_id),
+                    )
+                    session.commit()
+                    r.xack(
+                        EMAIL_STREAM, ConsumerGroup.EMAIL_CONSUMER.value, event["id"]
+                    )
+                    continue
 
                 po_lines = session.execute(
                     select(POLine, InventoryItem)
@@ -85,6 +143,18 @@ def process_events(events: list[dict]) -> None:
                         purchase_order_id=po.id,
                     )
                 )
+
+                if changed_by == OrderBy.SYSTEM.value:
+                    today = datetime.now(ZoneInfo(timezone)).date()
+                    session.add(
+                        SpendLedger(
+                            tenant_id=tenant_id,
+                            purchase_order_id=po.id,
+                            amount=po.total_value,
+                            business_date=today,
+                        )
+                    )
+
                 session.commit()
 
         except Exception as e:  # noqa: BLE001

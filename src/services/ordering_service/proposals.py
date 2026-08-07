@@ -1,9 +1,7 @@
 import uuid
 from collections import defaultdict
-from datetime import datetime, timedelta
 from decimal import Decimal
 from math import ceil
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -15,18 +13,20 @@ from src.db.models import (
     POEvent,
     POLine,
     PurchaseOrder,
-    SpendLedger,
     Supplier,
     SupplierItem,
     Tenant,
 )
 from src.events.bus import publish_event
-from src.schemas.autonomy import AutonomyState
 from src.schemas.event import EventCategory, ProcurementEventType
 from src.schemas.orders import OrderBy, PredictionMode
 from src.schemas.suppliers import POStatus
 from src.services.config_services import resolve_config
-from src.services.ordering_service import horizon_aggregate, protection_horizon
+from src.services.ordering_service import (
+    autonomy_checks,
+    horizon_aggregate,
+    protection_horizon,
+)
 
 
 def generate_proposals(
@@ -300,70 +300,28 @@ def generate_proposals(
         else:
             po.suggested_topups = None
 
-        if state and state == AutonomyState.AUTO_WITHIN_BOUNDS.value:
-            today = datetime.now(ZoneInfo(timezone)).date()
-            this_monday = today - timedelta(days=today.weekday())
+        all_passed = autonomy_checks(session, timezone, tenant_id, po, supplier, state)
 
-            daily_spend = session.scalar(
-                select(func.coalesce(func.sum(SpendLedger.amount), Decimal(0)))
-                .where(SpendLedger.tenant_id == tenant_id)
-                .where(SpendLedger.business_date == today)
-            ) or Decimal(0)
-
-            weekly_spend = session.scalar(
-                select(func.coalesce(func.sum(SpendLedger.amount), Decimal(0)))
-                .where(SpendLedger.tenant_id == tenant_id)
-                .where(SpendLedger.business_date >= this_monday)
-            ) or Decimal(0)
-
-            avg_order_value = session.scalar(
-                select(func.avg(PurchaseOrder.total_value))
-                .where(PurchaseOrder.tenant_id == tenant_id)
-                .where(PurchaseOrder.supplier_id == supplier_id)
-                .where(
-                    PurchaseOrder.status.in_(
-                        [POStatus.SENT, POStatus.CONFIRMED, POStatus.RECEIVED]
-                    )
+        if all_passed:
+            po.status = POStatus.APPROVED.value
+            session.add(
+                POEvent(
+                    tenant_id=tenant_id,
+                    purchase_order_id=po.id,
+                    from_status=POStatus.PROPOSED.value,
+                    to_status=POStatus.APPROVED.value,
+                    changed_by=OrderBy.SYSTEM.value,
+                    note="Auto-approved within autonomy bounds",
                 )
             )
 
-            valid_order = po.total_value <= config.ordering.max_order_value
-            valid_daily = (
-                daily_spend + po.total_value
-            ) <= config.ordering.max_daily_spend
-            valid_weekly = (
-                weekly_spend + po.total_value
-            ) <= config.ordering.max_weekly_spend
-            valid_novelty = (
-                avg_order_value is not None
-                and po.total_value
-                <= avg_order_value * Decimal(str(config.ordering.novelty_threshold))
+            events_to_publish.append(
+                {
+                    "purchase_order_id": str(po.id),
+                    "tenant_id": tenant_id,
+                    "changed_by": OrderBy.SYSTEM.value,
+                }
             )
-            valid_minimum = (
-                not supplier.minimum_order_value
-                or po.total_value >= supplier.minimum_order_value
-            )
-
-            all_passed = all(
-                [valid_order, valid_daily, valid_weekly, valid_novelty, valid_minimum]
-            )
-
-            if all_passed:
-                po.status = POStatus.APPROVED.value
-                session.add(
-                    POEvent(
-                        tenant_id=tenant_id,
-                        purchase_order_id=po.id,
-                        from_status=POStatus.PROPOSED.value,
-                        to_status=POStatus.APPROVED.value,
-                        changed_by=OrderBy.SYSTEM.value,
-                        note="Auto-approved within autonomy bounds",
-                    )
-                )
-
-                events_to_publish.append(
-                    {"purchase_order_id": str(po.id), "tenant_id": tenant_id}
-                )
 
         processed_pos.append(po)
 

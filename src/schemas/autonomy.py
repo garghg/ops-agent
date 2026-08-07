@@ -11,3 +11,4 @@ class AutonomyEventType(str, Enum):
     REVOKED = "revoked"
     DEMOTED = "demoted"
     PROMOTION_PROPOSED = "promotion_proposed"
+    EXECUTOR_REJECTED = "executor_rejected"
