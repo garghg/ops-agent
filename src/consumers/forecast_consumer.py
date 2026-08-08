@@ -51,8 +51,9 @@ def process_events(events: list[dict]):
             publish_event(
                 EventCategory.SYSTEM,
                 SystemEventType.FORECASTS_COMPUTED.value,
-                tenant_id,
+                "4",
                 {"business_date": business_date},
+                tenant_id,
             )
 
         except Exception as e:  # noqa: BLE001
@@ -94,4 +95,4 @@ def forecast_consumer():
 
 if __name__ == "__main__":
     setup_logging()
-    forecast_consumer()
+    forecast_consumer() 

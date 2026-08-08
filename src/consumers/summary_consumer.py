@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from src.config import CLAIM_INTERVAL_SECONDS
 from src.consumers.utils import CONSUMER_NAME
 from src.db.models import (
+    Anomaly,
     AutonomyEvent,
     EmailOutbox,
     InventoryItem,
@@ -25,8 +26,6 @@ from src.schemas.autonomy import AutonomyEventType
 from src.schemas.email import EmailStatus
 from src.schemas.event import ConsumerGroup, EventCategory, SystemEventType
 from src.schemas.suppliers import POStatus
-from src.services.alert_service import check_financial_alerts
-from src.services.config_services import resolve_config
 from src.services.health_service import check_heartbeats, record_heartbeat
 from src.services.utils import get_sales_summary
 
@@ -38,7 +37,7 @@ log = get_logger(__name__)
 def process_events(events: list[dict]):
     for event in events:
         try:
-            if event["event_type"] != SystemEventType.FORECASTS_COMPUTED.value:
+            if event["event_type"] != SystemEventType.ANOMALIES_PROCESSED.value:
                 r.xack(SYSTEM_STREAM, ConsumerGroup.SUMMARY_CONSUMER.value, event["id"])
                 continue
             business_date = event["payload"]["business_date"]
@@ -81,8 +80,12 @@ def process_events(events: list[dict]):
                 
                 stale = check_heartbeats(session)
                 
-                config = resolve_config(str(tenant.id), session)
-                alerts = check_financial_alerts(sales_summary, config.alerts)
+                alerts = session.scalars(
+                    select(Anomaly.evidence_sentence)
+                    .where(Anomaly.tenant_id == tenant_id)
+                    .where(Anomaly.business_date == business_date)
+                    .where(Anomaly.suppressed.is_(False))
+                ).all()
                 
                 executor_rejections = session.execute(
                     select(AutonomyEvent, Supplier.name)
