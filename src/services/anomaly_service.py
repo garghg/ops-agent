@@ -23,7 +23,7 @@ from src.services.config_services import resolve_config
 from src.services.utils import get_sales_summary
 
 
-def _persist_anomaly(
+def persist_anomaly(
     session: Session,
     tenant_id: str,
     anomaly_type: str,
@@ -117,7 +117,7 @@ def run_day_close_checks(session: Session, tenant_id: str, business_date: date):
         high_rev = forecast_revenue_qg["p90"]
 
         if not (low_rev <= actual_revenue <= high_rev):
-            _persist_anomaly(
+            persist_anomaly(
                 session,
                 tenant_id,
                 AnomalyType.FORECAST_RESIDUAL,
@@ -138,7 +138,7 @@ def run_day_close_checks(session: Session, tenant_id: str, business_date: date):
         high_units = forecast_units_qg["p90"]
 
         if not (low_units <= actual_units <= high_units):
-            _persist_anomaly(
+            persist_anomaly(
                 session,
                 tenant_id,
                 AnomalyType.FORECAST_RESIDUAL,
@@ -165,7 +165,7 @@ def run_day_close_checks(session: Session, tenant_id: str, business_date: date):
     if alerts:
         for alert in alerts:
             severity = 1 if alert["type"] in config.anomalies.tier1_types else 2
-            _persist_anomaly(
+            persist_anomaly(
                 session,
                 tenant_id,
                 alert["type"],
@@ -248,7 +248,7 @@ def run_intraday_check(session: Session, tenant_id: str, business_date: date):
             severity = (
                 1 if AnomalyType.INTRADAY_PACE in config.anomalies.tier1_types else 2
             )
-            _persist_anomaly(
+            persist_anomaly(
                 session,
                 tenant_id,
                 AnomalyType.INTRADAY_PACE,

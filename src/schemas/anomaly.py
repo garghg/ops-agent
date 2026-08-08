@@ -5,6 +5,7 @@ class AnomalyType:
     DISCOUNT_RATE = "discount_rate"
     STALE_HEARTBEAT = "stale_heartbeat"
     INTRADAY_PACE = "intraday_pace"
+    CONDITION_CHANGE = "condition_change"
     
 class AnomalySubject:
     TOTAL_UNITS = "total_units"

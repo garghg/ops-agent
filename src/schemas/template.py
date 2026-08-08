@@ -32,10 +32,22 @@ class OrderingConfig(BaseModel):
     max_weekly_spend: float = 5000.0
     novelty_threshold: float = 1.5
 
+class LearningConfig(BaseModel):
+    forecast_bias_half_life: int = 7
+    forecast_bias_clamp_low: float = 0.75
+    forecast_bias_clamp_high: float = 1.30
+    order_edit_half_life: int = 5
+    order_edit_clamp_low: float = 0.80
+    order_edit_clamp_high: float = 1.25
+    shrinkage_half_life: int = 4
+    shrinkage_clamp_low: float = 0.0
+    shrinkage_clamp_high: float = 0.30
+    clamp_alert_threshold: int = 5
 
 class TemplateConfig(BaseModel):
     schedule: ScheduleConfig = ScheduleConfig()
     alerts: AlertThresholds = AlertThresholds()
     ordering: OrderingConfig = OrderingConfig()
     anomalies: AnomalyConfig = AnomalyConfig()
+    learning: LearningConfig = LearningConfig()
     model_config = ConfigDict(extra="forbid")

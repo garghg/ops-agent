@@ -13,7 +13,7 @@ def check_financial_alerts(sales_summary, thresholds) -> list[dict]:
             {
                 "type": AnomalyType.VOID_RATE,
                 "subject": AnomalySubject.VOID_RATE,
-                "rate": void_rate,
+                "rate": float(void_rate),
                 "expected": thresholds.void_rate,
             }
         )
@@ -24,7 +24,7 @@ def check_financial_alerts(sales_summary, thresholds) -> list[dict]:
             {
                 "type": AnomalyType.REFUND_RATE,
                 "subject": AnomalySubject.REFUND_RATE,
-                "rate": refund_rate,
+                "rate": float(refund_rate),
                 "expected": thresholds.refund_rate,
             }
         )
@@ -36,7 +36,7 @@ def check_financial_alerts(sales_summary, thresholds) -> list[dict]:
                 {
                     "type": AnomalyType.DISCOUNT_RATE,
                     "subject": AnomalySubject.DISCOUNT_RATE,
-                    "rate": discount_rate,
+                    "rate": float(discount_rate),
                     "expected": thresholds.discount_rate,
                 }
             )

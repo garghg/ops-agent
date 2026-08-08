@@ -15,7 +15,7 @@ from src.db.models import (
 )
 from src.schemas.anomaly import AnomalySubject, AnomalyType
 from src.services.anomaly_service import (
-    _persist_anomaly,
+    persist_anomaly,
     run_day_close_checks,
     run_intraday_check,
 )
@@ -159,7 +159,7 @@ def _add_sales(session, tenant, business_date, count, hour=12):
 
 class TestPersistAnomaly:
     def test_basic_insert(self, seeded_db, tenant, business_date):
-        _persist_anomaly(
+        persist_anomaly(
             seeded_db,
             str(tenant.id),
             AnomalyType.VOID_RATE,
@@ -178,7 +178,7 @@ class TestPersistAnomaly:
         assert anomaly.suppressed is False
 
     def test_dedup_updates_evidence(self, seeded_db, tenant, business_date):
-        _persist_anomaly(
+        persist_anomaly(
             seeded_db,
             str(tenant.id),
             AnomalyType.VOID_RATE,
@@ -189,7 +189,7 @@ class TestPersistAnomaly:
             "first",
             48,
         )
-        _persist_anomaly(
+        persist_anomaly(
             seeded_db,
             str(tenant.id),
             AnomalyType.VOID_RATE,
@@ -209,7 +209,7 @@ class TestPersistAnomaly:
 
     def test_cooldown_suppresses(self, seeded_db, tenant, business_date):
         yesterday = business_date - timedelta(days=1)
-        _persist_anomaly(
+        persist_anomaly(
             seeded_db,
             str(tenant.id),
             AnomalyType.VOID_RATE,
@@ -220,7 +220,7 @@ class TestPersistAnomaly:
             "yesterday's alert",
             48,
         )
-        _persist_anomaly(
+        persist_anomaly(
             seeded_db,
             str(tenant.id),
             AnomalyType.VOID_RATE,
@@ -240,7 +240,7 @@ class TestPersistAnomaly:
 
     def test_no_cooldown_outside_window(self, seeded_db, tenant, business_date):
         old_date = business_date - timedelta(days=5)
-        _persist_anomaly(
+        persist_anomaly(
             seeded_db,
             str(tenant.id),
             AnomalyType.VOID_RATE,
@@ -251,7 +251,7 @@ class TestPersistAnomaly:
             "old alert",
             48,
         )
-        _persist_anomaly(
+        persist_anomaly(
             seeded_db,
             str(tenant.id),
             AnomalyType.VOID_RATE,
