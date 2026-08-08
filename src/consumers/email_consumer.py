@@ -44,7 +44,7 @@ def process_events(events: list[dict]) -> None:
             r.xack(EMAIL_STREAM, ConsumerGroup.EMAIL_CONSUMER.value, event["id"])
             continue
         try:
-            data = json.loads(event["payload"])
+            data = event["payload"]
             po_id = data["purchase_order_id"]
             tenant_id = event["tenant_id"]
         except Exception as e:  # noqa: BLE001

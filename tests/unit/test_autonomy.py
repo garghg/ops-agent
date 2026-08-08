@@ -246,12 +246,11 @@ class TestExecutorBlocksOutOfBounds:
 
         fake_event = {
             "id": "test-executor-block",
-            "payload": json.dumps(
+            "payload":
                 {
                     "purchase_order_id": str(po.id),
                     "changed_by": OrderBy.SYSTEM.value,
-                }
-            ),
+                },
             "tenant_id": str(tenant.id),
             "event_type": "po_approved",
         }
@@ -302,12 +301,11 @@ class TestExecutorAllowsOwnerApproved:
 
         fake_event = {
             "id": "test-owner-approve",
-            "payload": json.dumps(
+            "payload":
                 {
                     "purchase_order_id": str(po.id),
                     "changed_by": "owner",
-                }
-            ),
+                },
             "tenant_id": str(tenant.id),
             "event_type": "po_approved",
         }

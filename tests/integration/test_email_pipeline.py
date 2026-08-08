@@ -29,7 +29,7 @@ def test_approval_to_email(seeded_db):
 
     fake_event = {
         "id": "test-event-1",
-        "payload": json.dumps({"purchase_order_id": str(po.id), "changed_by": "owner"}),
+        "payload": {"purchase_order_id": str(po.id), "changed_by": "owner"},
         "tenant_id": str(tenant.id),
         "event_type": "po_approved",
     }
