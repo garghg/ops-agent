@@ -8,8 +8,9 @@ from rich.prompt import Prompt
 from rich.table import Table
 from sqlalchemy import func, select
 
+from services.ordering_service import rollup
 from src.cli.context import get_tenant
-from src.db.models import DailyActual, ForecastMetric
+from src.db.models import DailyActual, ForecastMetric, Supplier
 from src.schemas.models import ModelVersion
 from src.services.forecast_service import backtest as bt
 
@@ -137,3 +138,50 @@ def backtest():
         )
     )
     bt(session, str(tenant.id), str(earliest), str(latest))
+
+@app.command()
+def autonomy():
+    session, tenant = get_tenant()
+    console = Console()
+
+    suppliers = session.scalars(
+        select(Supplier)
+        .where(Supplier.tenant_id == tenant.id)
+        .where(Supplier.is_active == True)
+    ).all()
+
+    suppliers = [s for s in suppliers if not s.delivery_days]
+
+    if not suppliers:
+        console.print("[yellow]No on-demand suppliers found.[/yellow]")
+        return
+
+    table = Table(title=f"Autonomy Metrics — {tenant.name}")
+    table.add_column("Supplier")
+    table.add_column("Proposals", justify="right")
+    table.add_column("Span (days)", justify="right")
+    table.add_column("Approval Rate", justify="right")
+    table.add_column("Edit Median", justify="right")
+    table.add_column("Max Edit", justify="right")
+    table.add_column("Reject Streak", justify="right")
+    table.add_column("Critical Failures", justify="right")
+
+    for supplier in suppliers:
+        stats = rollup(session, str(tenant.id), str(supplier.id))
+        if not stats:
+            table.add_row(supplier.name, *["-"] * 7)
+            continue
+
+        table.add_row(
+            supplier.name,
+            str(stats["proposal_count"]),
+            str(stats["span_days"]),
+            f"{stats['approval_rate'] * 100:.0f}%" if stats["approval_rate"] is not None else "—",
+            f"{stats['edit_median'] * 100:.1f}%" if stats["edit_median"] is not None else "—",
+            f"{stats['max_edit'] * 100:.1f}%" if stats["max_edit"] is not None else "—",
+            str(stats["consecutive_rejects"]),
+            str(stats["critical_failures"]),
+        )
+
+    console.print()
+    console.print(table)
