@@ -2,7 +2,7 @@ from datetime import datetime, time, timedelta
 from statistics import median
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.db.models import AutonomyEvent, CapabilityState, POEvent, PurchaseOrder, Tenant
@@ -134,7 +134,7 @@ def evaluate_promotion(session: Session, tenant_id: str, supplier_id: str):
 
     if already_proposed:
         return
-
+    
     stats = rollup(session, tenant_id, supplier_id)
     if not stats:
         return
@@ -148,6 +148,7 @@ def evaluate_promotion(session: Session, tenant_id: str, supplier_id: str):
     if state == AutonomyState.AUTO_WITHIN_BOUNDS.value:
         return
 
+    print(f"DEBUG stats: {stats}")
     gates = (
         stats["proposal_count"] >= PROPOSAL_COUNT
         and stats["span_days"] >= SPAN_DAYS

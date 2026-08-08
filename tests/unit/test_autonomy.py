@@ -327,3 +327,4 @@ class TestExecutorAllowsOwnerApproved:
             select(SpendLedger).where(SpendLedger.purchase_order_id == po.id)
         )
         assert spend is None
+

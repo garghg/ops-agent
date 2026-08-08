@@ -1,11 +1,12 @@
 from datetime import date
 from decimal import Decimal
+
 from scripts.synthetic_generator import generate_sales
-from src.events.bus import read_event, create_group
 from src.consumers.bom_consumer import process_events as bom_process
 from src.consumers.stock_updater import process_events as stock_process
-from src.schemas.event import EventCategory, ConsumerGroup
 from src.db.models import InventoryItem, InventoryTransaction
+from src.events.bus import create_group, read_event
+from src.schemas.event import ConsumerGroup, EventCategory
 
 
 def test_full_pipeline(seeded_db):
