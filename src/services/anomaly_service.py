@@ -2,14 +2,23 @@ from datetime import date, datetime, timedelta
 from datetime import time as dt_time
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from src.clock import get_now
-from src.db.models import Anomaly, DailyActual, Forecast, Tenant
+from src.db.models import (
+    Anomaly,
+    DailyActual,
+    Forecast,
+    IntradayProfile,
+    SaleLineItem,
+    SaleTransaction,
+    Tenant,
+)
 from src.schemas.anomaly import AnomalySubject, AnomalyType
 from src.schemas.forecast import ForecastSeries
+from src.schemas.sale import SaleTransactionType
 from src.services.alert_service import check_financial_alerts
 from src.services.config_services import resolve_config
 from src.services.utils import get_sales_summary
@@ -69,9 +78,8 @@ def _persist_anomaly(
     session.commit()
 
 
-def run_day_close_checks(session: Session, tenant_id: str, business_date: str):
-    business_date = date.fromisoformat(business_date)
-    config = resolve_config(str(tenant_id), session)
+def run_day_close_checks(session: Session, tenant_id: str, business_date: date):
+    config = resolve_config(tenant_id, session)
 
     actual_revenue = session.scalar(
         select(DailyActual.value)
@@ -172,3 +180,91 @@ def run_day_close_checks(session: Session, tenant_id: str, business_date: str):
                 config.anomalies.cooldown_hours,
             )
 
+
+def run_intraday_check(session: Session, tenant_id: str, business_date: date):
+    config = resolve_config(tenant_id, session)
+
+    if not config:
+        return
+
+    forecast_units = session.execute(
+        select(Forecast.quantile_grid, Forecast.point_estimate)
+        .where(Forecast.tenant_id == tenant_id)
+        .where(Forecast.series == ForecastSeries.TOTAL_UNITS)
+        .where(Forecast.target_date == business_date)
+        .order_by(Forecast.forecast_date.desc())
+    ).first()
+
+    if not forecast_units:
+        return
+
+    quantile_grid, point_estimate = forecast_units
+    checkpoint_hour = config.anomalies.checkpoint_hour
+
+    latest_profile_date = session.scalar(
+        select(IntradayProfile.as_of_date)
+        .where(IntradayProfile.tenant_id == tenant_id)
+        .where(IntradayProfile.day_of_week == business_date.weekday())
+        .where(IntradayProfile.as_of_date <= business_date)
+        .order_by(IntradayProfile.as_of_date.desc())
+        .limit(1)
+    )
+
+    if not latest_profile_date:
+        return
+
+    profiles = session.execute(
+        select(IntradayProfile.hour, IntradayProfile.fraction)
+        .where(IntradayProfile.tenant_id == tenant_id)
+        .where(IntradayProfile.day_of_week == business_date.weekday())
+        .where(IntradayProfile.as_of_date == latest_profile_date)
+    ).all()
+
+    expected_cp_sales_factor = sum(
+        fraction for hour, fraction in profiles if hour <= checkpoint_hour
+    )
+
+    expected_cp_sales = point_estimate * expected_cp_sales_factor
+
+    timezone = session.scalar(select(Tenant.timezone).where(Tenant.id == tenant_id))
+    tz = ZoneInfo(timezone)
+    day_start = datetime.combine(business_date, dt_time.min, tzinfo=tz)
+    checkpoint_time = datetime.combine(
+        business_date, dt_time(checkpoint_hour), tzinfo=tz
+    )
+
+    total_sales = session.scalar(
+        select(func.coalesce(func.sum(SaleLineItem.quantity), 0))
+        .join(SaleTransaction, SaleTransaction.id == SaleLineItem.sale_transaction_id)
+        .where(SaleTransaction.tenant_id == tenant_id)
+        .where(SaleTransaction.timestamp >= day_start)
+        .where(SaleTransaction.timestamp < checkpoint_time)
+        .where(SaleTransaction.transaction_type == SaleTransactionType.SALE.value)
+    )
+
+    if quantile_grid:
+        low = quantile_grid["p05"] * expected_cp_sales_factor
+        high = quantile_grid["p90"] * expected_cp_sales_factor
+
+        if not (low <= total_sales <= high):
+            severity = (
+                1 if AnomalyType.INTRADAY_PACE in config.anomalies.tier1_types else 2
+            )
+            _persist_anomaly(
+                session,
+                tenant_id,
+                AnomalyType.INTRADAY_PACE,
+                AnomalySubject.TOTAL_UNITS,
+                severity,
+                business_date,
+                {
+                    "checkpoint_hour": checkpoint_hour,
+                    "actual_sales": float(total_sales),
+                    "expected_sales": float(expected_cp_sales),
+                    "expected_low": float(low),
+                    "expected_high": float(high),
+                    "pct_of_day": float(expected_cp_sales_factor),
+                },
+                f"Sales through {checkpoint_hour}:00 are {total_sales} vs {low:.0f}-{high:.0f} expected ({expected_cp_sales_factor:.0%} of day complete).",
+                config.anomalies.cooldown_hours,
+            )
