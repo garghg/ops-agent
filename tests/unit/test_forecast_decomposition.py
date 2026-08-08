@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import select
 
 from src.db.models import (
+    Category,
     DailyActual,
     Forecast,
     IntradayProfile,
@@ -34,6 +35,10 @@ def tenant(seeded_db):
 
 @pytest.fixture
 def inventory_items(seeded_db, tenant):
+    category = Category(tenant_id=tenant.id, name="base")
+    seeded_db.add(category)
+    seeded_db.flush()
+
     items = [
         InventoryItem(
             tenant_id=tenant.id,
@@ -43,7 +48,7 @@ def inventory_items(seeded_db, tenant):
             target_quantity=Decimal("80.00"),
             cost_per_unit=Decimal("2.00"),
             unit="oz",
-            category="base",
+            category_id=category.id,
         ),
         InventoryItem(
             tenant_id=tenant.id,
@@ -53,7 +58,7 @@ def inventory_items(seeded_db, tenant):
             target_quantity=Decimal("80.00"),
             cost_per_unit=Decimal("2.00"),
             unit="oz",
-            category="base",
+            category_id=category.id,
         ),
     ]
     seeded_db.add_all(items)

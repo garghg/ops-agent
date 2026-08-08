@@ -5,7 +5,6 @@ from decimal import Decimal
 from sqlalchemy import (
     ForeignKey,
     Numeric,
-    Text,
     UniqueConstraint,
     func,
 )
@@ -18,7 +17,7 @@ from .base import Base
 class ShrinkageRate(Base):
     __tablename__ = "shrinkage_rates"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "category", name="shrinkage_rates_tenant_id_category_key"),
+        UniqueConstraint("tenant_id", "category_id", name="shrinkage_rates_tenant_id_category_id_key"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -29,7 +28,11 @@ class ShrinkageRate(Base):
         ForeignKey("tenants.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    category: Mapped[str] = mapped_column(Text, nullable=False)
+    category_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("categories.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
     rate: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False, server_default="0")
     sample_count: Mapped[int] = mapped_column(nullable=False, server_default="0")
     last_updated: Mapped[datetime] = mapped_column(

@@ -6,6 +6,7 @@ from src.db.models import (
     BOMLine,
     CatalogItem,
     CatalogModifier,
+    Category,
     InventoryItem,
     Supplier,
     SupplierItem,
@@ -366,14 +367,25 @@ def seed() -> None:
             address="123 Main St.",
             latitude=49.2827,
             longitude=-123.1207,
-            owner_email="owner@devshop.com"
+            owner_email="owner@devshop.com",
         )
+        session.flush()
+        category_names = {item["category"] for item in SEED_ITEMS}
+        cat_by_name = {}
+        for name in category_names:
+            obj = Category(tenant_id=tenant.id, name=name)
+            session.add(obj)
+            cat_by_name[name] = obj
         session.flush()
 
         # Inventory items
         inv_objects = []
         for item in SEED_ITEMS:
-            obj = InventoryItem(**item, tenant_id=tenant.id)
+            item_copy = {**item}
+            cat_name = item_copy.pop("category")
+            obj = InventoryItem(
+                **item_copy, tenant_id=tenant.id, category_id=cat_by_name[cat_name].id
+            )
             inv_objects.append(obj)
             session.add(obj)
         session.flush()

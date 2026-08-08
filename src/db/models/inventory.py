@@ -17,6 +17,27 @@ from src.db.models.base import Base
 from src.schemas.inventory import InventoryTransactionType
 
 
+class Category(Base):
+    __tablename__ = "categories"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "name",
+            name="categories_tenant_id_item_name_key",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class InventoryItem(Base):
     __tablename__ = "inventory_items"
 
@@ -41,7 +62,11 @@ class InventoryItem(Base):
         nullable=False,
     )
     unit: Mapped[str] = mapped_column(Text, nullable=False)
-    category: Mapped[str] = mapped_column(Text, nullable=False)
+    category_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("categories.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
 
 
 class InventoryTransaction(Base):
@@ -81,4 +106,3 @@ class InventoryTransaction(Base):
         ForeignKey("tenants.id", ondelete="RESTRICT"),
         nullable=False,
     )
-

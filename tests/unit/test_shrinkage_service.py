@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy import select
 
 from src.db.models import (
+    Category,
     CountLine,
     InventoryItem,
     InventoryTransaction,
@@ -25,14 +26,17 @@ def tenant(seeded_db):
 def items(seeded_db, tenant):
     ice_cream = seeded_db.scalar(
         select(InventoryItem)
+        .join(Category, InventoryItem.category_id == Category.id)
         .where(InventoryItem.tenant_id == tenant.id)
-        .where(InventoryItem.category == "ice_cream")
+        .where(Category.name == "ice_cream")
         .limit(1)
     )
+    
     topping = seeded_db.scalar(
         select(InventoryItem)
+        .join(Category, InventoryItem.category_id == Category.id)
         .where(InventoryItem.tenant_id == tenant.id)
-        .where(InventoryItem.category == "toppings")
+        .where(Category.name == "toppings")
         .limit(1)
     )
 
@@ -115,9 +119,13 @@ class TestSecondCount:
 
         compute_shrinkage_rates(seeded_db, count2.id, tenant.id)
 
-        rates = {r.category: r for r in seeded_db.scalars(
-            select(ShrinkageRate).where(ShrinkageRate.tenant_id == tenant.id)
-        ).all()}
+        rates_rows = seeded_db.execute(
+            select(ShrinkageRate, Category.name.label("category_name"))
+            .join(Category, ShrinkageRate.category_id == Category.id)
+            .where(ShrinkageRate.tenant_id == tenant.id)
+        ).all()
+
+        rates = {row.category_name: row.ShrinkageRate for row in rates_rows}
 
         assert rates["ice_cream"].rate == pytest.approx(Decimal("0.1"), abs=Decimal("0.001"))
         assert rates["ice_cream"].sample_count == 1
@@ -201,8 +209,9 @@ class TestRunningAverage:
 
         rate = seeded_db.scalar(
             select(ShrinkageRate)
+            .join(Category, ShrinkageRate.category_id == Category.id)
             .where(ShrinkageRate.tenant_id == tenant.id)
-            .where(ShrinkageRate.category == "ice_cream")
+            .where(Category.name == "ice_cream")
         )
 
         assert rate.rate == pytest.approx(Decimal("0.1"), abs=Decimal("0.001"))

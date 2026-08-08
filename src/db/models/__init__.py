@@ -17,7 +17,7 @@ from src.db.models.forecasting import (
     ItemDemandForecast,
     ShareVector,
 )
-from src.db.models.inventory import InventoryItem, InventoryTransaction
+from src.db.models.inventory import Category, InventoryItem, InventoryTransaction
 from src.db.models.sales import SaleLineItem, SaleTransaction
 from src.db.models.shrinkage import ShrinkageRate
 from src.db.models.suppliers import (
