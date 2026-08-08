@@ -6,7 +6,6 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from src.clock import get_now
 from src.db.models import (
     Anomaly,
     DailyActual,
@@ -36,16 +35,14 @@ def _persist_anomaly(
     cooldown_hours: int,
 ):
     dedup_key = f"{anomaly_type}:{subject}:{business_date!s}"
-    utc_time = get_now()
-    timezone = session.scalar(select(Tenant.timezone).where(Tenant.id == tenant_id))
-    local_time = utc_time.astimezone(ZoneInfo(timezone))
-    cooldown_start = local_time - timedelta(hours=cooldown_hours)
+    cooldown_start = business_date - timedelta(days=cooldown_hours // 24)
     suppressed = False
 
     recent = session.scalar(
         select(Anomaly)
         .where(Anomaly.tenant_id == tenant_id)
-        .where(Anomaly.created_at > cooldown_start)
+        .where(Anomaly.business_date >= cooldown_start)
+        .where(Anomaly.business_date < business_date)
         .where(Anomaly.suppressed.is_(False))
         .where(Anomaly.anomaly_type == anomaly_type)
         .where(Anomaly.subject == subject)
@@ -128,9 +125,9 @@ def run_day_close_checks(session: Session, tenant_id: str, business_date: date):
                 severity,
                 business_date,
                 {
-                    "predicted_min": low_rev,
-                    "predicted_max": high_rev,
-                    "actual_revenue": actual_revenue,
+                    "predicted_min": float(low_rev),
+                    "predicted_max": float(high_rev),
+                    "actual_revenue": float(actual_revenue),
                 },
                 f"Revenue expected between ${low_rev} and ${high_rev}; Actual revenue: ${actual_revenue}",
                 config.anomalies.cooldown_hours,
@@ -149,9 +146,9 @@ def run_day_close_checks(session: Session, tenant_id: str, business_date: date):
                 severity,
                 business_date,
                 {
-                    "predicted_min": low_units,
-                    "predicted_max": high_units,
-                    "actual_units_sold": actual_units,
+                    "predicted_min": float(low_units),
+                    "predicted_max": float(high_units),
+                    "actual_units_sold": float(actual_units),
                 },
                 f"Unit sales expected between {low_units} and {high_units}; Actual sales: {actual_units}",
                 config.anomalies.cooldown_hours,
@@ -199,6 +196,7 @@ def run_intraday_check(session: Session, tenant_id: str, business_date: date):
         return
 
     quantile_grid, point_estimate = forecast_units
+    point_estimate = float(point_estimate)
     checkpoint_hour = config.anomalies.checkpoint_hour
 
     latest_profile_date = session.scalar(
@@ -220,9 +218,9 @@ def run_intraday_check(session: Session, tenant_id: str, business_date: date):
         .where(IntradayProfile.as_of_date == latest_profile_date)
     ).all()
 
-    expected_cp_sales_factor = sum(
+    expected_cp_sales_factor = float(sum(
         fraction for hour, fraction in profiles if hour <= checkpoint_hour
-    )
+    ))
 
     expected_cp_sales = point_estimate * expected_cp_sales_factor
 
