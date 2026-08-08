@@ -1,7 +1,6 @@
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from math import ceil
-from zoneinfo import ZoneInfo
 
 import typer
 from rich.console import Console
@@ -483,6 +482,7 @@ def confirm(po_id: str):
             to_status=POStatus.CONFIRMED.value,
             changed_by=OrderBy.OWNER.value,
             note=f"Confirmed via CLI. Edits: {edits}" if edits else "Confirmed via CLI",
+            edits=edits,
         )
     )
 
@@ -775,6 +775,7 @@ def edit(po_id: str):
             to_status=POStatus.PROPOSED.value,
             changed_by=OrderBy.OWNER.value,
             note=f"Edited via CLI: {edits}",
+            edits=edits,
         )
     )
 

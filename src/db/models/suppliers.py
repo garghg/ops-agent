@@ -198,6 +198,7 @@ class POEvent(Base):
     to_status: Mapped[str] = mapped_column(Text, nullable=False)
     changed_by: Mapped[str] = mapped_column(Text, nullable=False)
     note: Mapped[str | None] = mapped_column(Text)
+    edits: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )
