@@ -19,9 +19,11 @@ from src.db.models import (
 )
 from src.events.bus import publish_event
 from src.schemas.event import EventCategory, ProcurementEventType
+from src.schemas.learning import FactorKind
 from src.schemas.orders import OrderBy, PredictionMode
 from src.schemas.suppliers import POStatus
 from src.services.config_services import resolve_config
+from src.services.learning_service import get_factor
 from src.services.ordering_service import (
     autonomy_checks,
     horizon_aggregate,
@@ -186,6 +188,9 @@ def generate_proposals(
                 shortfall = s - position
                 mode = PredictionMode.FORECAST.value
 
+            edit_bias = get_factor(session, tenant_id, FactorKind.ORDER_EDIT_BIAS, str(si.id))
+            shortfall *= float(edit_bias)
+            
             quantity_ordered = max(
                 0,
                 ceil((shortfall) / si.pack_size) * si.pack_size,

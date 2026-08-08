@@ -1,6 +1,7 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from math import ceil
+from zoneinfo import ZoneInfo
 
 import typer
 from rich.console import Console
@@ -20,8 +21,11 @@ from src.db.models import (
 from src.events.bus import publish_event
 from src.schemas.event import EventCategory, InventoryEventType, ProcurementEventType
 from src.schemas.inventory import InventoryTransactionType
+from src.schemas.learning import FactorKind
 from src.schemas.orders import OrderBy
 from src.schemas.suppliers import POStatus
+from src.services.config_services import resolve_config
+from src.services.learning_service import update_factor
 from src.services.ordering_service import evaluate_demotion
 
 app = typer.Typer()
@@ -463,8 +467,25 @@ def confirm(po_id: str):
             original = line.quantity_ordered
             line.quantity_ordered = Decimal(new_qty)
             edits.append(
-                {"item": item.name, "from": float(original), "to": float(new_qty)}
+                {"item": item.name, "from": float(original), "to": float(new_qty), "supplier_item_id": str(line.supplier_item_id)}
             )
+    
+    config = resolve_config(str(tenant.id), session)
+    if edits:
+        for edit in edits:
+            if edit["from"] > 0 and edit["to"] > 0:
+                observation = edit["to"] / edit["from"]
+                update_factor(
+                    session,
+                    str(tenant.id),
+                    FactorKind.ORDER_EDIT_BIAS,
+                    edit["supplier_item_id"],
+                    observation,
+                    config.learning.order_edit_half_life,
+                    config.learning.order_edit_clamp_low,
+                    config.learning.order_edit_clamp_high,
+                    datetime.now(ZoneInfo(tenant.timezone)).date(),
+                )
 
     all_lines = session.scalars(
         select(POLine)
@@ -703,11 +724,13 @@ def edit(po_id: str):
         if new_quantity and new_quantity != "0":
             line.quantity_ordered = Decimal(new_quantity)
             edits.append(
-                {"item": item.name, "from": float(original), "to": float(new_quantity)}
+                {"item": item.name, "from": float(original), "to": float(new_quantity), "supplier_item_id": str(line.supplier_item_id)}
             )
         elif new_quantity == "0":
             session.delete(line)
-            edits.append({"item": item.name, "from": float(original), "to": 0})
+            edits.append(
+                {"item": item.name, "from": float(original), "to": float(0), "supplier_item_id": str(line.supplier_item_id)}
+            )
 
     if po.suggested_topups:
         console.print(
@@ -740,11 +763,28 @@ def edit(po_id: str):
             session.flush()
 
             edits.append(
-                {"item": suggested["name"], "from": 0, "to": float(quantity_ordered)}
+                {"item": suggested["name"], "from": 0, "to": float(quantity_ordered), "supplier_item_id": suggested["supplier_item_id"]}
             )
+            
     if not edits:
         console.print("[yellow]No changes made.[/yellow]")
         return
+
+    config = resolve_config(str(tenant.id), session)
+    for edit in edits:
+        if edit["from"] > 0 and edit["to"] > 0:
+            observation = edit["to"] / edit["from"]
+            update_factor(
+                session,
+                str(tenant.id),
+                FactorKind.ORDER_EDIT_BIAS,
+                edit["supplier_item_id"],
+                observation,
+                config.learning.order_edit_half_life,
+                config.learning.order_edit_clamp_low,
+                config.learning.order_edit_clamp_high,
+                datetime.now(ZoneInfo(tenant.timezone)).date(),
+            )
 
     remaining_lines = session.scalars(
         select(POLine)
