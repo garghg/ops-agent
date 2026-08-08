@@ -22,6 +22,7 @@ from src.schemas.event import EventCategory, InventoryEventType, ProcurementEven
 from src.schemas.inventory import InventoryTransactionType
 from src.schemas.orders import OrderBy
 from src.schemas.suppliers import POStatus
+from src.services.ordering_service import evaluate_demotion
 
 app = typer.Typer()
 
@@ -634,6 +635,7 @@ def reject(po_id: str):
     )
 
     session.commit()
+    evaluate_demotion(session, str(tenant.id), str(po.supplier_id))
     console.print("[green]✓ Purchase order rejected.[/green]")
 
 
@@ -688,6 +690,7 @@ def edit(po_id: str):
             )
         )
         session.commit()
+        evaluate_demotion(session, str(tenant.id), str(po.supplier_id))
         console.print("[green]✓ Purchase order cancelled.[/green]")
         return
 
@@ -762,6 +765,7 @@ def edit(po_id: str):
             )
         )
         session.commit()
+        evaluate_demotion(session, str(tenant.id), str(po.supplier_id))
         console.print("[yellow]All lines removed — order cancelled.[/yellow]")
         return
 
@@ -781,6 +785,7 @@ def edit(po_id: str):
 
     po.suggested_topups = None
     session.commit()
+    evaluate_demotion(session, str(tenant.id), str(po.supplier_id))
     console.print(
         f"[green]✓ Purchase order updated. New total: ${po.total_value:.2f}[/green]"
     )

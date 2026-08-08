@@ -1,9 +1,11 @@
+from datetime import datetime, time, timedelta
 from statistics import median
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from src.db.models import AutonomyEvent, CapabilityState, POEvent, PurchaseOrder
+from src.db.models import AutonomyEvent, CapabilityState, POEvent, PurchaseOrder, Tenant
 from src.schemas.autonomy import AutonomyEventType, AutonomyState
 from src.schemas.orders import OrderBy
 from src.schemas.suppliers import POStatus
@@ -61,7 +63,12 @@ def rollup(session: Session, tenant_id: str, supplier_id: str) -> dict:
     edited = []
 
     for p in proposals:
-        if p.edits is not None and p.changed_by == OrderBy.OWNER.value:
+        if (
+            p.edits is not None
+            and p.changed_by == OrderBy.OWNER.value
+            and p.from_status == POStatus.PROPOSED.value
+            and p.to_status == POStatus.PROPOSED.value
+        ):
             for e in p.edits:
                 if e["from"] != 0:
                     edited.append(abs(e["to"] - e["from"]) / e["from"])
@@ -111,6 +118,23 @@ def rollup(session: Session, tenant_id: str, supplier_id: str) -> dict:
 
 
 def evaluate_promotion(session: Session, tenant_id: str, supplier_id: str):
+    timezone = session.scalar(select(Tenant.timezone).where(Tenant.id == tenant_id))
+    local_today = datetime.now(ZoneInfo(timezone)).date()
+    local_start = datetime.combine(local_today, time.min, tzinfo=ZoneInfo(timezone))
+    local_end = local_start + timedelta(days=1)
+
+    already_proposed = session.scalar(
+        select(AutonomyEvent.id)
+        .where(AutonomyEvent.tenant_id == tenant_id)
+        .where(AutonomyEvent.supplier_id == supplier_id)
+        .where(AutonomyEvent.event_type == AutonomyEventType.PROMOTION_PROPOSED.value)
+        .where(AutonomyEvent.created_at >= local_start)
+        .where(AutonomyEvent.created_at < local_end)
+    )
+
+    if already_proposed:
+        return
+
     stats = rollup(session, tenant_id, supplier_id)
     if not stats:
         return
