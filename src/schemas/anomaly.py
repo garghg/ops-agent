@@ -12,3 +12,7 @@ class AnomalySubject:
     VOID_RATE = "void_rate"
     REFUND_RATE = "refund_rate"
     DISCOUNT_RATE = "discount_rate"
+    
+class AnomalyAction:
+    ACK = "ack"
+    DISMISS = "dismiss"

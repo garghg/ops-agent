@@ -1,5 +1,6 @@
 import typer
 
+from src.cli.anomaly import app as anomaly_app
 from src.cli.autonomy import app as autonomy_app
 from src.cli.count import app as count_app
 from src.cli.login import login, logout
@@ -15,3 +16,4 @@ app.command()(logout)
 app.add_typer(proposals_app, name="proposals")
 app.add_typer(metrics_app, name="metrics")
 app.add_typer(autonomy_app, name="autonomy")
+app.add_typer(anomaly_app, name="anomaly")

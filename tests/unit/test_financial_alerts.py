@@ -45,7 +45,7 @@ class TestVoidAlert:
         )
         alerts = check_financial_alerts(summary, AlertThresholds())
         assert len(alerts) == 1
-        assert "Void rate" in alerts[0]
+        assert alerts[0]["type"] == "void_rate"
 
 
 class TestRefundAlert:
@@ -59,7 +59,7 @@ class TestRefundAlert:
         )
         alerts = check_financial_alerts(summary, AlertThresholds())
         assert len(alerts) == 1
-        assert "Refund rate" in alerts[0]
+        assert alerts[0]["type"] == "refund_rate"
 
 
 class TestDiscountAlert:
@@ -73,7 +73,7 @@ class TestDiscountAlert:
         )
         alerts = check_financial_alerts(summary, AlertThresholds())
         assert len(alerts) == 1
-        assert "Discount rate" in alerts[0]
+        assert alerts[0]["type"] == "discount_rate"
 
 
 class TestMultipleAlerts:

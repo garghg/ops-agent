@@ -21,7 +21,7 @@ class AlertThresholds(BaseModel):
 class AnomalyConfig(BaseModel):
     cooldown_hours: int = 48
     checkpoint_hour: int = 14
-    tier1_types: list[str]
+    tier1_types: list[str] = ["stale_heartbeat"]
 
 
 class OrderingConfig(BaseModel):
