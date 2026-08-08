@@ -1,3 +1,4 @@
+from src.db.models.anomaly import Anomaly, AnomalyFeedback
 from src.db.models.autonomy import (
     AutonomyEvent,
     CapabilityState,
