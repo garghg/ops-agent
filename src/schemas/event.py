@@ -16,6 +16,8 @@ class SalesEventType(str, Enum):
 class SystemEventType(str, Enum):
     DAY_OPENED = "day_opened"
     DAY_CLOSED = "day_closed"
+    INTRADAY_CHECKPOINT = "intraday_checkpoint"
+    ANOMALIES_PROCESSED = "anomalies_processed"
     FORECASTS_COMPUTED = "forecasts_computed"
     PROPOSALS_GENERATED = "proposals_generated"
 
@@ -33,6 +35,7 @@ class ConsumerGroup(str, Enum):
     SUMMARY_CONSUMER = "summary_consumer"
     FORECAST_CONSUMER = "forecast_consumer"
     ORDERING_CONSUMER = "ordering_consumer"
+    ANOMALY_CONSUMER = "anomaly_consumer"
 
 
 class InventoryEventType(str, Enum):

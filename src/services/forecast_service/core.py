@@ -18,6 +18,7 @@ from src.db.models import (
     Tenant,
     WeatherObservation,
 )
+from src.schemas.forecast import ForecastSeries
 from src.schemas.models import ModelVersion
 from src.schemas.sale import SaleTransactionType
 from src.schemas.weather import WeatherSource
@@ -66,7 +67,7 @@ def actuals_aggregate(session: Session, tenant_id: str, business_date: str):
 
     revenue_stmt = insert(DailyActual).values(
         tenant_id=tenant_id,
-        series="total_revenue",
+        series=ForecastSeries.TOTAL_REVENUE,
         actual_date=business_date,
         value=revenue,
     )
@@ -79,7 +80,7 @@ def actuals_aggregate(session: Session, tenant_id: str, business_date: str):
 
     units_stmt = insert(DailyActual).values(
         tenant_id=tenant_id,
-        series="total_units",
+        series=ForecastSeries.TOTAL_UNITS,
         actual_date=business_date,
         value=total_units,
     )

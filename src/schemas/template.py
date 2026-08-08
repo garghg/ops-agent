@@ -18,6 +18,12 @@ class AlertThresholds(BaseModel):
     discount_rate: float = 0.10
 
 
+class AnomalyConfig(BaseModel):
+    cooldown_hours: int = 48
+    checkpoint_hour: int = 14
+    tier1_types: list[str]
+
+
 class OrderingConfig(BaseModel):
     default_service_level: float = 0.95
     category_service_levels: dict[str, float] = {}
@@ -31,4 +37,5 @@ class TemplateConfig(BaseModel):
     schedule: ScheduleConfig = ScheduleConfig()
     alerts: AlertThresholds = AlertThresholds()
     ordering: OrderingConfig = OrderingConfig()
+    anomalies: AnomalyConfig = AnomalyConfig()
     model_config = ConfigDict(extra="forbid")

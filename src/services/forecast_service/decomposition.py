@@ -18,6 +18,7 @@ from src.db.models import (
     ShareVector,
     Tenant,
 )
+from src.schemas.forecast import ForecastSeries
 from src.schemas.inventory import InventoryTransactionType
 from src.schemas.models import ModelVersion
 from src.schemas.sale import SaleTransactionType
@@ -46,7 +47,7 @@ def compute_share_vectors(session: Session, tenant_id: str, as_of_date: str):
 
     actuals = session.scalars(
         select(DailyActual)
-        .where(DailyActual.series == "total_units")
+        .where(DailyActual.series == ForecastSeries.TOTAL_UNITS)
         .where(DailyActual.actual_date < as_of_date)
         .where(
             DailyActual.actual_date
@@ -104,7 +105,7 @@ def compute_item_demand(session: Session, tenant_id: str, as_of_date: str):
         .where(Forecast.target_date > as_of_date)
         .where(Forecast.model_version == ModelVersion.POISSON_GLM.value)
         .where(Forecast.forecast_date == as_of_date)
-        .where(Forecast.series == "total_units")
+        .where(Forecast.series == ForecastSeries.TOTAL_UNITS)
     ).all()
 
     latest_share_date = session.scalar(
@@ -132,7 +133,7 @@ def compute_item_demand(session: Session, tenant_id: str, as_of_date: str):
             .where(Forecast.target_date > as_of_date)
             .where(Forecast.model_version == ModelVersion.SEASONAL_NAIVE.value)
             .where(Forecast.forecast_date == as_of_date)
-            .where(Forecast.series == "total_units")
+            .where(Forecast.series == ForecastSeries.TOTAL_UNITS)
         ).all()
 
     if not forecasts or not share_vectors:

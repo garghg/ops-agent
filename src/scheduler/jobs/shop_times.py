@@ -47,6 +47,19 @@ def poll_shop_times() -> None:
                     {"business_date": local_time.date().isoformat()},
                     tenant_id=str(tenant.id),
                 )
+            
+            if (
+                local_time.hour == config.anomalies.checkpoint_hour
+                and local_time.minute == 0
+            ):
+                log.info("event_emitted", tenant_id=str(tenant.id), event="INTRADAY_CHECKPOINT")
+                publish_event(
+                    EventCategory.SYSTEM,
+                    SystemEventType.INTRADAY_CHECKPOINT.value,
+                    "2",
+                    {"business_date": local_time.date().isoformat()},
+                    tenant_id=str(tenant.id),
+                )
 
             if (
                 local_time.hour == config.schedule.schedule_gen_hour

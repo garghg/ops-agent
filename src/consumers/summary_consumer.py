@@ -1,12 +1,11 @@
 import time
 from datetime import date, datetime, timedelta
 from datetime import time as dt_time
-from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 import redis
 from jinja2 import Environment, FileSystemLoader
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from src.config import CLAIM_INTERVAL_SECONDS
@@ -16,7 +15,6 @@ from src.db.models import (
     EmailOutbox,
     InventoryItem,
     PurchaseOrder,
-    SaleTransaction,
     Supplier,
     Tenant,
 )
@@ -26,11 +24,11 @@ from src.logging import get_logger, setup_logging
 from src.schemas.autonomy import AutonomyEventType
 from src.schemas.email import EmailStatus
 from src.schemas.event import ConsumerGroup, EventCategory, SystemEventType
-from src.schemas.sale import SaleTransactionType
 from src.schemas.suppliers import POStatus
 from src.services.alert_service import check_financial_alerts
 from src.services.config_services import resolve_config
 from src.services.health_service import check_heartbeats, record_heartbeat
+from src.services.utils import get_sales_summary
 
 SYSTEM_STREAM = f"{EventCategory.SYSTEM.value}_events"
 env = Environment(loader=FileSystemLoader("src/templates"))
@@ -66,32 +64,7 @@ def process_events(events: list[dict]):
                     business_date + timedelta(days=1), dt_time.min, tzinfo=tz
                 )
 
-                sales_summary = session.execute(
-                    select(
-                        func.count().label("transaction_count"),
-                        func.coalesce(
-                            func.sum(SaleTransaction.total), Decimal(0)
-                        ).label("revenue"),
-                        func.coalesce(
-                            func.sum(SaleTransaction.discount_amount), Decimal(0)
-                        ).label("total_discounts"),
-                        func.count()
-                        .filter(
-                            SaleTransaction.transaction_type == SaleTransactionType.VOID
-                        )
-                        .label("void_count"),
-                        func.count()
-                        .filter(
-                            SaleTransaction.transaction_type
-                            == SaleTransactionType.REFUND
-                        )
-                        .label("refund_count"),
-                    ).where(
-                        SaleTransaction.tenant_id == tenant_id,
-                        SaleTransaction.timestamp >= day_start,
-                        SaleTransaction.timestamp < day_end,
-                    )
-                ).first()
+                sales_summary = get_sales_summary(session, tenant_id, day_start, day_end)
                 
                 low_inventory = session.scalars(
                     select(InventoryItem)
