@@ -19,9 +19,11 @@ from src.db.models import (
     WeatherObservation,
 )
 from src.schemas.forecast import ForecastSeries
+from src.schemas.learning import FactorKind
 from src.schemas.models import ModelVersion
 from src.schemas.sale import SaleTransactionType
 from src.schemas.weather import WeatherSource
+from src.services.config_services import resolve_config
 from src.services.forecast_service.config import (
     FORECAST_HORIZON,
     HORIZON_LONG,
@@ -34,6 +36,7 @@ from src.services.forecast_service.metrics import (
     compute_forecast_metrics,
     compute_quantile_grid,
 )
+from src.services.learning_service import get_factor, update_factor
 
 
 def actuals_aggregate(session: Session, tenant_id: str, business_date: str):
@@ -270,6 +273,8 @@ def forecast_glm(session: Session, tenant_id: str, as_of_date: str):
             df = pd.get_dummies(df, columns=["day_of_week", "month"])
             df = df.reindex(columns=columns, fill_value=0)
             prediction = model.predict(df)[0]
+            bias = get_factor(session, tenant_id, FactorKind.FORECAST_BIAS, series)
+            prediction = prediction * float(bias)
 
             bucket_dict = None
             if quantile_grid:
@@ -315,3 +320,63 @@ def backtest(session: Session, tenant_id: str, start_date: str, end_date: str):
         forecast_trailing_mean(session, tenant_id, str(current_date))
         forecast_glm(session, tenant_id, str(current_date))
         compute_forecast_metrics(session, tenant_id, str(current_date))
+
+
+def update_forecast_bias(session: Session, tenant_id: str, business_date: str):
+    business_date = date.fromisoformat(business_date)
+    actuals = session.scalars(
+        select(DailyActual)
+        .where(DailyActual.actual_date == business_date)
+        .where(DailyActual.tenant_id == tenant_id)
+    ).all()
+
+    if not actuals:
+        return
+
+    series_lst = [actual.series for actual in actuals]
+
+    forecasts = session.scalars(
+        select(Forecast)
+        .where(Forecast.target_date == business_date)
+        .where(Forecast.tenant_id == tenant_id)
+        .where(Forecast.model_version == ModelVersion.POISSON_GLM.value)
+        .order_by(Forecast.forecast_date.desc())
+    ).all()
+
+    if not forecasts:
+        return
+
+    actual_map = {a.series: float(a.value) for a in actuals}
+    forecast_map = {}
+    for f in forecasts:
+        if f.series not in forecast_map:
+            forecast_map[f.series] = float(f.point_estimate)
+
+    config = resolve_config(tenant_id, session)
+
+    for series in series_lst:
+        predicted = forecast_map.get(series)
+        actual = actual_map.get(series)
+
+        if predicted is None or actual is None or predicted <= 0 or actual <= 0:
+            continue
+
+        bias = get_factor(session, tenant_id, FactorKind.FORECAST_BIAS, series)
+        raw_prediction = predicted / float(bias)
+
+        if raw_prediction <= 0:
+            continue
+
+        observation = actual / raw_prediction
+
+        update_factor(
+            session,
+            tenant_id,
+            FactorKind.FORECAST_BIAS,
+            series,
+            observation,
+            config.learning.forecast_bias_half_life,
+            config.learning.forecast_bias_clamp_low,
+            config.learning.forecast_bias_clamp_high,
+            business_date,
+        )

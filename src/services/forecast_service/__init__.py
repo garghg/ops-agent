@@ -6,14 +6,15 @@ from src.services.forecast_service.core import (
     forecast_seasonal_naive,
     forecast_trailing_mean,
     train_glm,
-)
-from src.services.forecast_service.metrics import (
-    check_promotion_gate,
-    compute_forecast_metrics,
-    compute_quantile_grid,
+    update_forecast_bias,
 )
 from src.services.forecast_service.decomposition import (
     compute_intraday_profiles,
     compute_item_demand,
     compute_share_vectors,
+)
+from src.services.forecast_service.metrics import (
+    check_promotion_gate,
+    compute_forecast_metrics,
+    compute_quantile_grid,
 )

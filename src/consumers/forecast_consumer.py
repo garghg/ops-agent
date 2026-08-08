@@ -17,6 +17,7 @@ from src.services.forecast_service import (
     forecast_glm,
     forecast_seasonal_naive,
     forecast_trailing_mean,
+    update_forecast_bias,
 )
 from src.services.health_service import record_heartbeat
 
@@ -44,6 +45,7 @@ def process_events(events: list[dict]):
                 forecast_trailing_mean(session, tenant_id, business_date)
                 forecast_glm(session, tenant_id, business_date)
                 compute_forecast_metrics(session, tenant_id, business_date)
+                update_forecast_bias(session, tenant_id, business_date)
                 compute_share_vectors(session, tenant_id, business_date)
                 compute_item_demand(session, tenant_id, business_date)
                 compute_intraday_profiles(session, tenant_id, business_date)
