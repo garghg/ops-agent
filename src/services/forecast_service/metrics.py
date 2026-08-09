@@ -25,7 +25,9 @@ from src.services.forecast_service.config import (
 )
 
 
-def compute_forecast_metrics(session: Session, tenant_id: str, metric_date: str):
+def compute_forecast_metrics(
+    session: Session, tenant_id: str, metric_date: str, flush_only: bool = False
+):
     metric_date = date.fromisoformat(metric_date)
     actuals = session.scalars(
         select(DailyActual)
@@ -76,8 +78,11 @@ def compute_forecast_metrics(session: Session, tenant_id: str, metric_date: str)
         )
 
         session.execute(stmt)
-
-    session.commit()
+        
+    if flush_only:
+        session.flush()
+    else:
+        session.commit()
 
 
 def compute_quantile_grid(
@@ -182,26 +187,28 @@ def check_promotion_gate(
     if total_actual != 0:
         challenger_wape = challenger_total_mae / total_actual
         champion_wape = champion_total_mae / total_actual
-    
+
     skills = None
     if challenger_wape is not None and champion_wape is not None:
         skills = 1 - (challenger_wape / champion_wape)
-    
+
     coverage_pct = None
     if challenger_coverage_total != 0:
         coverage_pct = (challenger_coverage_true / challenger_coverage_total) * 100
-    
+
     passed = False
     if (
         skills is not None
         and skills > MIN_SKILL_IMPROVEMENT
         and coverage_pct is not None
         and COVERAGE_LOWER_BOUND <= coverage_pct <= COVERAGE_UPPER_BOUND
+        and challenger_wape is not None
     ):
         passed = True
 
     return {
         "skills": skills,
         "coverage_pct": coverage_pct,
+        "wape": challenger_wape,
         "passed": passed,
     }

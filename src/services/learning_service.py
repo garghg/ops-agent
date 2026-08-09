@@ -1,12 +1,24 @@
-from datetime import date
+from datetime import date, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from src.db.models import CorrectionFactor, FactorHistory
+from src.db.models import (
+    BacktestResult,
+    CorrectionFactor,
+    FactorHistory,
+    ModelRegistry,
+)
 from src.schemas.anomaly import AnomalyType
+from src.schemas.models import ModelVersion
 from src.services.anomaly_service import persist_anomaly
 from src.services.config_services import resolve_config
+from src.services.forecast_service import (
+    PROMOTION_LOOKBACK_DAYS,
+    backtest,
+    check_promotion_gate,
+)
 
 
 def update_factor(
@@ -46,7 +58,7 @@ def update_factor(
     alpha = 1 - 0.5 ** (1 / half_life)
     old_value = float(row.value)
     raw = old_value + alpha * (observation - old_value)
-    
+
     if row.evidence_count == 0:
         raw = observation
 
@@ -132,15 +144,15 @@ def reset_factor(
         .where(CorrectionFactor.kind == kind)
         .where(CorrectionFactor.scope_key == scope_key)
     )
-    
+
     if not row:
         return
-    
+
     old_value = row.value
     row.value = default
     row.evidence_count = 0
     row.consecutive_clamps = 0
-    
+
     session.add(
         FactorHistory(
             tenant_id=tenant_id,
@@ -151,5 +163,62 @@ def reset_factor(
             clamped=False,
         )
     )
-    
+
+    session.commit()
+
+
+def champion_eval(session: Session, tenant_id: str, challenger: str, as_of_date: date):
+    cur_champion = session.scalar(
+        select(ModelRegistry.active_version).where(ModelRegistry.tenant_id == tenant_id)
+    )
+
+    if not cur_champion:
+        cur_champion = ModelVersion.POISSON_GLM.value
+
+    nested = session.begin_nested()
+
+    start = as_of_date - timedelta(days=PROMOTION_LOOKBACK_DAYS)
+    backtest(session, tenant_id, str(start), str(as_of_date), [cur_champion], True)
+    backtest(session, tenant_id, str(start), str(as_of_date), [challenger], True)
+    results = check_promotion_gate(
+        session, tenant_id, str(as_of_date), cur_champion, challenger
+    )
+
+    nested.rollback()
+
+    if not results:
+        return
+
+    result_row = BacktestResult(
+        tenant_id=tenant_id,
+        champion_version=cur_champion,
+        challenger_version=challenger,
+        start_date=start,
+        end_date=as_of_date,
+        passed=results["passed"],
+        skill=results["skills"],
+        wape=results["wape"],
+        coverage_pct=results["coverage_pct"],
+    )
+    session.add(result_row)
+
+    if results["passed"]:
+        update_stmt = insert(ModelRegistry).values(
+            tenant_id=tenant_id,
+            active_version=challenger,
+            previous_version=cur_champion,
+            backtest_evidence=results,
+            promoted_at=func.now(),
+        )
+        update_stmt = update_stmt.on_conflict_do_update(
+            constraint="model_registry_tenant_key",
+            set_={
+                "active_version": update_stmt.excluded.active_version,
+                "previous_version": update_stmt.excluded.previous_version,
+                "backtest_evidence": update_stmt.excluded.backtest_evidence,
+                "promoted_at": update_stmt.excluded.promoted_at,
+            },
+        )
+        session.execute(update_stmt)
+
     session.commit()

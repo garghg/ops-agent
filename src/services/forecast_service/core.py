@@ -99,7 +99,9 @@ def actuals_aggregate(session: Session, tenant_id: str, business_date: str):
     session.commit()
 
 
-def forecast_seasonal_naive(session: Session, tenant_id: str, as_of_date: str):
+def forecast_seasonal_naive(
+    session: Session, tenant_id: str, as_of_date: str, flush_only: bool = False
+):
     as_of_date = date.fromisoformat(as_of_date)
     lookback = as_of_date - timedelta(days=SEASONAL_NAIVE_LOOKBACK_DAYS)
     actuals = session.execute(
@@ -142,10 +144,15 @@ def forecast_seasonal_naive(session: Session, tenant_id: str, as_of_date: str):
 
             session.execute(stmt)
 
-    session.commit()
+    if flush_only:
+        session.flush()
+    else:
+        session.commit()
 
 
-def forecast_trailing_mean(session: Session, tenant_id: str, as_of_date: str):
+def forecast_trailing_mean(
+    session: Session, tenant_id: str, as_of_date: str, flush_only: bool = False
+):
     as_of_date = date.fromisoformat(as_of_date)
     lookback = as_of_date - timedelta(days=TRAILING_MEAN_LOOKBACK_DAYS)
     actuals = session.execute(
@@ -181,7 +188,10 @@ def forecast_trailing_mean(session: Session, tenant_id: str, as_of_date: str):
 
             session.execute(stmt)
 
-    session.commit()
+    if flush_only:
+        session.flush()
+    else:
+        session.commit()
 
 
 def build_features(
@@ -276,7 +286,13 @@ TRAIN_DISPATCH = {
 }
 
 
-def _forecast_data(session: Session, tenant_id: str, as_of_date: str, model_name: str):
+def _forecast_data(
+    session: Session,
+    tenant_id: str,
+    as_of_date: str,
+    model_name: str,
+    flush_only: bool = False,
+):
     series_lst = session.scalars(
         select(DailyActual.series).where(DailyActual.tenant_id == tenant_id).distinct()
     ).all()
@@ -285,6 +301,14 @@ def _forecast_data(session: Session, tenant_id: str, as_of_date: str, model_name
         return
 
     as_of_date = date.fromisoformat(as_of_date)
+    
+    active_model = session.scalar(
+        select(ModelRegistry.active_version)
+        .where(ModelRegistry.tenant_id == tenant_id)
+    )
+
+    if not active_model:
+        active_model = ModelVersion.POISSON_GLM.value
 
     for series in series_lst:
         result = TRAIN_DISPATCH[model_name](session, tenant_id, series, as_of_date)
@@ -296,15 +320,6 @@ def _forecast_data(session: Session, tenant_id: str, as_of_date: str, model_name
         quantile_grid = compute_quantile_grid(
             session, tenant_id, model_name, as_of_date
         )
-
-        active_model = session.scalar(
-            select(ModelRegistry.active_version)
-            .where(ModelRegistry.tenant_id == tenant_id)
-            .where(ModelRegistry.series == series)
-        )
-
-        if not active_model:
-            active_model = ModelVersion.POISSON_GLM.value
 
         for offset in range(1, FORECAST_HORIZON + 1):
             target_date = as_of_date + timedelta(days=offset)
@@ -360,15 +375,26 @@ def _forecast_data(session: Session, tenant_id: str, as_of_date: str, model_name
 
             session.execute(stmt)
 
-        session.commit()
+        if flush_only:
+            session.flush()
+        else:
+            session.commit()
 
 
-def forecast_glm(session: Session, tenant_id: str, as_of_date: str):
-    _forecast_data(session, tenant_id, as_of_date, ModelVersion.POISSON_GLM.value)
+def forecast_glm(
+    session: Session, tenant_id: str, as_of_date: str, flush_only: bool = False
+):
+    _forecast_data(
+        session, tenant_id, as_of_date, ModelVersion.POISSON_GLM.value, flush_only
+    )
 
 
-def forecast_lgbm(session: Session, tenant_id: str, as_of_date: str):
-    _forecast_data(session, tenant_id, as_of_date, ModelVersion.LIGHTGBM.value)
+def forecast_lgbm(
+    session: Session, tenant_id: str, as_of_date: str, flush_only: bool = False
+):
+    _forecast_data(
+        session, tenant_id, as_of_date, ModelVersion.LIGHTGBM.value, flush_only
+    )
 
 
 FORECAST_DISPATCH = {
@@ -378,18 +404,23 @@ FORECAST_DISPATCH = {
 
 
 def backtest(
-    session: Session, tenant_id: str, start_date: str, end_date: str, models: list[str]
+    session: Session,
+    tenant_id: str,
+    start_date: str,
+    end_date: str,
+    models: list[str],
+    flush_only: bool = False,
 ):
     start_date = date.fromisoformat(start_date)
     end_date = date.fromisoformat(end_date)
 
     for offset in range((end_date - start_date).days + 1):
         current_date = start_date + timedelta(days=offset)
-        forecast_seasonal_naive(session, tenant_id, str(current_date))
-        forecast_trailing_mean(session, tenant_id, str(current_date))
+        forecast_seasonal_naive(session, tenant_id, str(current_date), flush_only)
+        forecast_trailing_mean(session, tenant_id, str(current_date), flush_only)
         for model in models:
-            FORECAST_DISPATCH[model](session, tenant_id, str(current_date))
-        compute_forecast_metrics(session, tenant_id, str(current_date))
+            FORECAST_DISPATCH[model](session, tenant_id, str(current_date), flush_only)
+        compute_forecast_metrics(session, tenant_id, str(current_date), flush_only)
 
 
 def update_forecast_bias(session: Session, tenant_id: str, business_date: str):
@@ -404,42 +435,44 @@ def update_forecast_bias(session: Session, tenant_id: str, business_date: str):
         return
 
     series_lst = [actual.series for actual in actuals]
+    
+    active_model = session.scalar(
+        select(ModelRegistry.active_version)
+        .where(ModelRegistry.tenant_id == tenant_id)
+    )
+
+    if not active_model:
+        active_model = ModelVersion.POISSON_GLM.value
+
+    forecasts = session.scalars(
+        select(Forecast)
+        .where(Forecast.target_date == business_date)
+        .where(Forecast.tenant_id == tenant_id)
+        .where(Forecast.model_version == active_model)
+        .order_by(Forecast.forecast_date.desc())
+    ).all()
+
+    if not forecasts:
+        return
+
+    actual_map = {a.series: float(a.value) for a in actuals}
+    forecast_map = {}
+    for f in forecasts:
+        if f.series not in forecast_map:
+            forecast_map[f.series] = float(f.point_estimate)
 
     config = resolve_config(tenant_id, session)
 
     for series in series_lst:
-        active_model = session.scalar(
-            select(ModelRegistry.active_version)
-            .where(ModelRegistry.tenant_id == tenant_id)
-            .where(ModelRegistry.series == series)
-        )
-
-        if not active_model:
-            active_model = ModelVersion.POISSON_GLM.value
-
-        forecasts = session.scalars(
-            select(Forecast)
-            .where(Forecast.target_date == business_date)
-            .where(Forecast.tenant_id == tenant_id)
-            .where(Forecast.model_version == active_model)
-            .order_by(Forecast.forecast_date.desc())
-        ).all()
-
-        if not forecasts:
-            continue
-
-        actual_map = {a.series: float(a.value) for a in actuals}
-        forecast_map = {}
-        for f in forecasts:
-            if f.series not in forecast_map:
-                forecast_map[f.series] = float(f.point_estimate)
         predicted = forecast_map.get(series)
         actual = actual_map.get(series)
 
         if predicted is None or actual is None or predicted <= 0 or actual <= 0:
             continue
 
-        bias = get_factor(session, tenant_id, FactorKind.FORECAST_BIAS, f"{series}:{active_model}")
+        bias = get_factor(
+            session, tenant_id, FactorKind.FORECAST_BIAS, f"{series}:{active_model}"
+        )
         raw_prediction = predicted / float(bias)
 
         if raw_prediction <= 0:

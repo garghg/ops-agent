@@ -3,6 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    Boolean,
     Date,
     ForeignKey,
     Numeric,
@@ -21,8 +22,7 @@ class ModelRegistry(Base):
     __table_args__ = (
         UniqueConstraint(
             "tenant_id",
-            "series",
-            name="model_registry_tenant_series_key",
+            name="model_registry_tenant_key",
         ),
     )
 
@@ -34,7 +34,6 @@ class ModelRegistry(Base):
         ForeignKey("tenants.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    series: Mapped[str] = mapped_column(Text, nullable=False)
     active_version: Mapped[str] = mapped_column(Text, nullable=False)
     previous_version: Mapped[str | None] = mapped_column(Text, nullable=True)
     promoted_at: Mapped[datetime] = mapped_column(
@@ -63,10 +62,11 @@ class BacktestResult(Base):
         ForeignKey("tenants.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    series: Mapped[str] = mapped_column(Text, nullable=False)
-    model_version: Mapped[str] = mapped_column(Text, nullable=False)
+    challenger_version: Mapped[str] = mapped_column(Text, nullable=False)
+    champion_version: Mapped[str] = mapped_column(Text, nullable=False)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    passed: Mapped[bool] = mapped_column(Boolean, nullable=False)
     skill: Mapped[Decimal | None] = mapped_column(Numeric(10, 6), nullable=True)
     wape: Mapped[Decimal | None] = mapped_column(Numeric(10, 6), nullable=True)
     coverage_pct: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)
