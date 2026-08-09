@@ -206,12 +206,19 @@ def build_features(
     }
 
 
-def train_glm(session: Session, tenant_id: str, series: str):
-    actuals = session.scalars(
+def train_glm(
+    session: Session, tenant_id: str, series: str, cutoff_date: date | None = None
+):
+    query = (
         select(DailyActual)
         .where(DailyActual.tenant_id == tenant_id)
         .where(DailyActual.series == series)
-    ).all()
+    )
+
+    if cutoff_date is not None:
+        query = query.where(DailyActual.actual_date < cutoff_date)
+
+    actuals = session.scalars(query).all()
 
     if not actuals:
         return
@@ -250,7 +257,7 @@ def forecast_glm(session: Session, tenant_id: str, as_of_date: str):
     as_of_date = date.fromisoformat(as_of_date)
 
     for series in series_lst:
-        result = train_glm(session, tenant_id, series)
+        result = train_glm(session, tenant_id, series, as_of_date)
 
         if result is None:
             continue
@@ -311,14 +318,19 @@ def forecast_glm(session: Session, tenant_id: str, as_of_date: str):
         session.commit()
 
 
-def backtest(session: Session, tenant_id: str, start_date: str, end_date: str):
+def backtest(
+    session: Session, tenant_id: str, start_date: str, end_date: str, models: list[str]
+):
     start_date = date.fromisoformat(start_date)
     end_date = date.fromisoformat(end_date)
+
     for offset in range((end_date - start_date).days + 1):
         current_date = start_date + timedelta(days=offset)
         forecast_seasonal_naive(session, tenant_id, str(current_date))
         forecast_trailing_mean(session, tenant_id, str(current_date))
-        forecast_glm(session, tenant_id, str(current_date))
+        for model in models:
+            if model == ModelVersion.POISSON_GLM:
+                forecast_glm(session, tenant_id, str(current_date))
         compute_forecast_metrics(session, tenant_id, str(current_date))
 
 

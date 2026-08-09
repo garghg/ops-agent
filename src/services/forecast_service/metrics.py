@@ -18,6 +18,7 @@ from src.services.forecast_service.config import (
     HORIZON_MEDIUM,
     HORIZON_SHORT,
     MIN_BUCKET_SAMPLES,
+    MIN_SKILL_IMPROVEMENT,
     PROMOTION_LOOKBACK_DAYS,
     QUANTILE_LABELS,
     QUANTILE_LEVELS,
@@ -126,13 +127,18 @@ def compute_quantile_grid(
     return result if result else None
 
 
-def check_promotion_gate(session: Session, tenant_id: str, as_of_date: str):
+def check_promotion_gate(
+    session: Session, tenant_id: str, as_of_date: str, champion: str, challenger: str
+):
     as_of_date = date.fromisoformat(as_of_date)
 
-    glm_metrics = session.scalars(
+    if champion == challenger:
+        return
+
+    champion_metrics = session.scalars(
         select(ForecastMetric)
         .where(ForecastMetric.tenant_id == tenant_id)
-        .where(ForecastMetric.model_version == ModelVersion.POISSON_GLM.value)
+        .where(ForecastMetric.model_version == champion)
         .where(
             ForecastMetric.target_date
             >= as_of_date - timedelta(days=PROMOTION_LOOKBACK_DAYS)
@@ -140,10 +146,10 @@ def check_promotion_gate(session: Session, tenant_id: str, as_of_date: str):
         .where(ForecastMetric.target_date < as_of_date)
     ).all()
 
-    seasonal_metrics = session.scalars(
+    challenger_metrics = session.scalars(
         select(ForecastMetric)
         .where(ForecastMetric.tenant_id == tenant_id)
-        .where(ForecastMetric.model_version == ModelVersion.SEASONAL_NAIVE.value)
+        .where(ForecastMetric.model_version == challenger)
         .where(
             ForecastMetric.target_date
             >= as_of_date - timedelta(days=PROMOTION_LOOKBACK_DAYS)
@@ -161,22 +167,38 @@ def check_promotion_gate(session: Session, tenant_id: str, as_of_date: str):
         .where(DailyActual.actual_date < as_of_date)
     ).all()
 
-    if not (glm_metrics and seasonal_metrics and actuals):
+    if not (champion_metrics and challenger_metrics and actuals):
         return
 
     total_actual = sum(actual.value for actual in actuals)
-    gm_total_mae = sum(gm.mae for gm in glm_metrics)
-    sm_total_mae = sum(sm.mae for sm in seasonal_metrics)
-    gm_coverage_total = sum(1 for gm in glm_metrics if gm.coverage is not None)
-    gm_coverage_true = sum(1 for gm in glm_metrics if gm.coverage)
+    challenger_total_mae = sum(clm.mae for clm in challenger_metrics)
+    champion_total_mae = sum(chm.mae for chm in champion_metrics)
+    challenger_coverage_total = sum(
+        1 for clm in challenger_metrics if clm.coverage is not None
+    )
+    challenger_coverage_true = sum(1 for clm in challenger_metrics if clm.coverage)
 
-    glm_wape = gm_total_mae / total_actual
-    naive_wape = sm_total_mae / total_actual
-
-    skills = 1 - (glm_wape / naive_wape)
-    coverage_pct = (gm_coverage_true / gm_coverage_total) * 100
+    challenger_wape = None
+    champion_wape = None
+    if total_actual != 0:
+        challenger_wape = challenger_total_mae / total_actual
+        champion_wape = champion_total_mae / total_actual
+    
+    skills = None
+    if challenger_wape is not None and champion_wape is not None:
+        skills = 1 - (challenger_wape / champion_wape)
+    
+    coverage_pct = None
+    if challenger_coverage_total != 0:
+        coverage_pct = (challenger_coverage_true / challenger_coverage_total) * 100
+    
     passed = False
-    if skills > 0 and COVERAGE_LOWER_BOUND <= coverage_pct <= COVERAGE_UPPER_BOUND:
+    if (
+        skills is not None
+        and skills > MIN_SKILL_IMPROVEMENT
+        and coverage_pct is not None
+        and COVERAGE_LOWER_BOUND <= coverage_pct <= COVERAGE_UPPER_BOUND
+    ):
         passed = True
 
     return {

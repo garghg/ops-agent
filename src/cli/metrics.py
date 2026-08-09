@@ -88,7 +88,9 @@ def forecast():
             "coverage_rate": coverage_rate,
         }
 
-    naive_wape = aggregate_metrics.get(ModelVersion.SEASONAL_NAIVE.value, {"wape": Decimal(0)})["wape"]
+    naive_wape = aggregate_metrics.get(
+        ModelVersion.SEASONAL_NAIVE.value, {"wape": Decimal(0)}
+    )["wape"]
     for k in aggregate_metrics:  # noqa: PLC0206
         model_wape = aggregate_metrics.get(k, {"wape": Decimal(0)})["wape"]
         if naive_wape > 0:
@@ -137,7 +139,8 @@ def backtest():
             DailyActual.tenant_id == tenant.id
         )
     )
-    bt(session, str(tenant.id), str(earliest), str(latest))
+    bt(session, str(tenant.id), str(earliest), str(latest), [ModelVersion.POISSON_GLM.value])
+
 
 @app.command()
 def autonomy():
@@ -176,8 +179,12 @@ def autonomy():
             supplier.name,
             str(stats["proposal_count"]),
             str(stats["span_days"]),
-            f"{stats['approval_rate'] * 100:.0f}%" if stats["approval_rate"] is not None else "—",
-            f"{stats['edit_median'] * 100:.1f}%" if stats["edit_median"] is not None else "—",
+            f"{stats['approval_rate'] * 100:.0f}%"
+            if stats["approval_rate"] is not None
+            else "—",
+            f"{stats['edit_median'] * 100:.1f}%"
+            if stats["edit_median"] is not None
+            else "—",
             f"{stats['max_edit'] * 100:.1f}%" if stats["max_edit"] is not None else "—",
             str(stats["consecutive_rejects"]),
             str(stats["critical_failures"]),
