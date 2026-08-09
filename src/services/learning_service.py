@@ -178,8 +178,14 @@ def champion_eval(session: Session, tenant_id: str, challenger: str, as_of_date:
     nested = session.begin_nested()
 
     start = as_of_date - timedelta(days=PROMOTION_LOOKBACK_DAYS)
-    backtest(session, tenant_id, str(start), str(as_of_date), [cur_champion], True)
-    backtest(session, tenant_id, str(start), str(as_of_date), [challenger], True)
+    backtest(
+        session,
+        tenant_id,
+        str(start),
+        str(as_of_date),
+        [cur_champion, challenger],
+        True,
+    )
     results = check_promotion_gate(
         session, tenant_id, str(as_of_date), cur_champion, challenger
     )

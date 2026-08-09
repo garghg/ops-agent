@@ -6,6 +6,7 @@ from src.cli.count import app as count_app
 from src.cli.factors import app as factors_app
 from src.cli.login import login, logout
 from src.cli.metrics import app as metrics_app
+from src.cli.models import app as models_app
 from src.cli.proposals import app as proposals_app
 from src.cli.shrinkage import app as shrinkage_app
 
@@ -19,3 +20,4 @@ app.add_typer(metrics_app, name="metrics")
 app.add_typer(autonomy_app, name="autonomy")
 app.add_typer(anomaly_app, name="anomaly")
 app.add_typer(factors_app, name="factors")
+app.add_typer(models_app, name="models")
