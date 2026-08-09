@@ -175,6 +175,9 @@ def champion_eval(session: Session, tenant_id: str, challenger: str, as_of_date:
     if not cur_champion:
         cur_champion = ModelVersion.POISSON_GLM.value
 
+    if cur_champion == challenger:
+        return
+    
     nested = session.begin_nested()
 
     start = as_of_date - timedelta(days=PROMOTION_LOOKBACK_DAYS)
