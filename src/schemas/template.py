@@ -10,6 +10,9 @@ class ScheduleConfig(BaseModel):
     schedule_gen_hour: int = 9
     schedule_gen_minute: int = 0
     poll_interval_seconds: int = 10800
+    service_rate: int = 10
+    min_staffing: int = 2
+    slot_length_minutes: int = 60
 
 
 class AlertThresholds(BaseModel):
