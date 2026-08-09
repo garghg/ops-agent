@@ -148,7 +148,6 @@ def evaluate_promotion(session: Session, tenant_id: str, supplier_id: str):
     if state == AutonomyState.AUTO_WITHIN_BOUNDS.value:
         return
 
-    print(f"DEBUG stats: {stats}")
     gates = (
         stats["proposal_count"] >= PROPOSAL_COUNT
         and stats["span_days"] >= SPAN_DAYS

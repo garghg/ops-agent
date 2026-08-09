@@ -318,7 +318,7 @@ def _forecast_data(
 
         model, columns = result
         quantile_grid = compute_quantile_grid(
-            session, tenant_id, model_name, as_of_date
+            session, tenant_id, model_name, str(as_of_date)
         )
 
         for offset in range(1, FORECAST_HORIZON + 1):

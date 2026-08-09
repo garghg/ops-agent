@@ -1,20 +1,23 @@
 import time
 
 import redis
+from sqlalchemy import select
 
 from src.config import CLAIM_INTERVAL_SECONDS
 from src.consumers.utils import CONSUMER_NAME
+from src.db.models import ModelRegistry
 from src.db.session import SessionLocal
 from src.events.bus import claim_pending_events, publish_event, r, read_event
 from src.logging import get_logger, setup_logging
 from src.schemas.event import ConsumerGroup, EventCategory, SystemEventType
+from src.schemas.models import ModelVersion
 from src.services.forecast_service import (
+    FORECAST_DISPATCH,
     actuals_aggregate,
     compute_forecast_metrics,
     compute_intraday_profiles,
     compute_item_demand,
     compute_share_vectors,
-    forecast_glm,
     forecast_seasonal_naive,
     forecast_trailing_mean,
     update_forecast_bias,
@@ -40,10 +43,16 @@ def process_events(events: list[dict]):
 
         try:
             with SessionLocal() as session:
+                active_model = session.scalar(
+                    select(ModelRegistry.active_version)
+                    .where(ModelRegistry.tenant_id == tenant_id)
+                )
+                if not active_model:
+                    active_model = ModelVersion.POISSON_GLM.value
                 actuals_aggregate(session, tenant_id, business_date)
                 forecast_seasonal_naive(session, tenant_id, business_date)
                 forecast_trailing_mean(session, tenant_id, business_date)
-                forecast_glm(session, tenant_id, business_date)
+                FORECAST_DISPATCH[active_model](session, tenant_id, business_date)
                 compute_forecast_metrics(session, tenant_id, business_date)
                 update_forecast_bias(session, tenant_id, business_date)
                 compute_share_vectors(session, tenant_id, business_date)

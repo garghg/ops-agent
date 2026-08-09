@@ -14,11 +14,7 @@ from src.schemas.anomaly import AnomalyType
 from src.schemas.models import ModelVersion
 from src.services.anomaly_service import persist_anomaly
 from src.services.config_services import resolve_config
-from src.services.forecast_service import (
-    PROMOTION_LOOKBACK_DAYS,
-    backtest,
-    check_promotion_gate,
-)
+from src.services.forecast_service.config import PROMOTION_LOOKBACK_DAYS
 
 
 def update_factor(
@@ -168,6 +164,9 @@ def reset_factor(
 
 
 def champion_eval(session: Session, tenant_id: str, challenger: str, as_of_date: date):
+    from src.services.forecast_service.core import backtest
+    from src.services.forecast_service.metrics import check_promotion_gate
+    
     cur_champion = session.scalar(
         select(ModelRegistry.active_version).where(ModelRegistry.tenant_id == tenant_id)
     )

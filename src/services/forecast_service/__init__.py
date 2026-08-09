@@ -1,11 +1,14 @@
 from src.services.forecast_service.core import (
+    FORECAST_DISPATCH,
     actuals_aggregate,
     backtest,
     build_features,
     forecast_glm,
+    forecast_lgbm,
     forecast_seasonal_naive,
     forecast_trailing_mean,
     train_glm,
+    train_lgbm,
     update_forecast_bias,
 )
 from src.services.forecast_service.decomposition import (

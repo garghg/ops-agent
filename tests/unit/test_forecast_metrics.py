@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy import select
 
 from src.db.models import DailyActual, Forecast, ForecastMetric, Tenant
+from src.schemas.models import ModelVersion
 from src.services.forecast_service import (
     check_promotion_gate,
     compute_forecast_metrics,
@@ -15,6 +16,7 @@ from src.services.forecast_service import (
 @pytest.fixture
 def tenant(seeded_db):
     return seeded_db.scalar(select(Tenant).limit(1))
+
 
 class TestComputeForecastMetrics:
     def test_basic_mae_and_bias(self, seeded_db, tenant):
@@ -330,7 +332,13 @@ class TestCheckPromotionGate:
             seeded_db, tenant, glm_mae=5, naive_mae=15, coverage_values=coverage
         )
 
-        result = check_promotion_gate(seeded_db, str(tenant.id), "2026-07-20")
+        result = check_promotion_gate(
+            seeded_db,
+            str(tenant.id),
+            "2026-07-20",
+            ModelVersion.SEASONAL_NAIVE.value,
+            ModelVersion.POISSON_GLM.value,
+        )
 
         assert result is not None
         assert result["passed"] is True
@@ -344,7 +352,13 @@ class TestCheckPromotionGate:
             seeded_db, tenant, glm_mae=20, naive_mae=10, coverage_values=coverage
         )
 
-        result = check_promotion_gate(seeded_db, str(tenant.id), "2026-07-20")
+        result = check_promotion_gate(
+            seeded_db,
+            str(tenant.id),
+            "2026-07-20",
+            ModelVersion.SEASONAL_NAIVE.value,
+            ModelVersion.POISSON_GLM.value,
+        )
 
         assert result is not None
         assert result["passed"] is False
@@ -358,12 +372,24 @@ class TestCheckPromotionGate:
             seeded_db, tenant, glm_mae=5, naive_mae=15, coverage_values=coverage
         )
 
-        result = check_promotion_gate(seeded_db, str(tenant.id), "2026-07-20")
+        result = check_promotion_gate(
+            seeded_db,
+            str(tenant.id),
+            "2026-07-20",
+            ModelVersion.SEASONAL_NAIVE.value,
+            ModelVersion.POISSON_GLM.value,
+        )
 
         assert result is not None
         assert result["passed"] is False
         assert result["coverage_pct"] < 80
 
     def test_returns_none_with_no_data(self, seeded_db, tenant):
-        result = check_promotion_gate(seeded_db, str(tenant.id), "2026-07-20")
+        result = check_promotion_gate(
+            seeded_db,
+            str(tenant.id),
+            "2026-07-20",
+            ModelVersion.SEASONAL_NAIVE.value,
+            ModelVersion.POISSON_GLM.value,
+        )
         assert result is None
