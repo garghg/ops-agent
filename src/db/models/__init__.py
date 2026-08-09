@@ -31,3 +31,12 @@ from src.db.models.suppliers import (
 )
 from src.db.models.system import Heartbeat
 from src.db.models.weather import WeatherObservation
+from src.db.models.workforce import (
+    AvailabilityException,
+    AvailabilityRule,
+    Certification,
+    Employee,
+    Schedule,
+    ScheduleEdit,
+    Shift,
+)
