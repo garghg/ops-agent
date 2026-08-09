@@ -3,14 +3,14 @@ from rich.console import Console
 from rich.table import Table
 from sqlalchemy import select
 
-from src.db.models import ShrinkageRate, Tenant
+from src.db.models import Category, CorrectionFactor, Tenant
 from src.db.session import SessionLocal
+from src.schemas.learning import FactorKind
 
 app = typer.Typer()
 
 @app.command()
 def report(tenant_name: str):
-
     console = Console()
 
     with SessionLocal() as session:
@@ -21,15 +21,23 @@ def report(tenant_name: str):
             console.print(f"[red]No tenant matching '{tenant_name}'[/red]")
             return
 
-        rates = session.execute(
-            select(ShrinkageRate)
-            .where(ShrinkageRate.tenant_id == tenant.id)
-            .order_by(ShrinkageRate.category)
-        ).scalars().all()
+        factors = session.scalars(
+            select(CorrectionFactor)
+            .where(CorrectionFactor.tenant_id == tenant.id)
+            .where(CorrectionFactor.kind == FactorKind.SHRINKAGE)
+        ).all()
 
-        if not rates:
+        if not factors:
             console.print("[yellow]No shrinkage data yet. Run at least two counts.[/yellow]")
             return
+
+        category_ids = [f.scope_key for f in factors]
+        categories = session.scalars(
+            select(Category)
+            .where(Category.id.in_(category_ids))
+            .where(Category.tenant_id == tenant.id)
+        ).all()
+        cat_map = {str(c.id): c.name for c in categories}
 
         table = Table(title=f"Shrinkage Rates -- {tenant.name}")
         table.add_column("Category")
@@ -37,12 +45,12 @@ def report(tenant_name: str):
         table.add_column("Samples", justify="right")
         table.add_column("Last Updated")
 
-        for r in rates:
+        for f in factors:
             table.add_row(
-                r.category,
-                f"{r.rate * 100:.2f}%",
-                str(r.sample_count),
-                r.last_updated.strftime("%Y-%m-%d %H:%M"),
+                cat_map.get(f.scope_key, f.scope_key),
+                f"{float(f.value) * 100:.2f}%",
+                str(f.evidence_count),
+                f.updated_at.strftime("%Y-%m-%d %H:%M"),
             )
 
         console.print(table)

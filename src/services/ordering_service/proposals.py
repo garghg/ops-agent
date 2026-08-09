@@ -188,8 +188,8 @@ def generate_proposals(
                 shortfall = s - position
                 mode = PredictionMode.FORECAST.value
 
-            edit_bias = get_factor(session, tenant_id, FactorKind.ORDER_EDIT_BIAS, str(si.id))
-            shortfall *= float(edit_bias)
+            edit_bias = Decimal(get_factor(session, tenant_id, FactorKind.ORDER_EDIT_BIAS, str(si.id)))
+            shortfall *= edit_bias
             
             quantity_ordered = max(
                 0,

@@ -344,7 +344,7 @@ def seed() -> None:
                 "TRUNCATE TABLE bom_lines, mapping_gaps, inventory_transactions, "
                 "po_events, po_lines, purchase_orders, supplier_items, suppliers, "
                 "catalog_items, catalog_modifiers, inventory_items, "
-                "shrinkage_rates, physical_counts, count_lines, "
+                "physical_counts, count_lines, "
                 "tenant_configs, tenants, templates, email_outbox "
                 "RESTART IDENTITY CASCADE"
             )

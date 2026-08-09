@@ -46,6 +46,9 @@ def update_factor(
     alpha = 1 - 0.5 ** (1 / half_life)
     old_value = float(row.value)
     raw = old_value + alpha * (observation - old_value)
+    
+    if row.evidence_count == 0:
+        raw = observation
 
     clamped = False
     clamp_hit = None

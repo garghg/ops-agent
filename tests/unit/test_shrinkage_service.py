@@ -6,14 +6,15 @@ from sqlalchemy import select
 
 from src.db.models import (
     Category,
+    CorrectionFactor,
     CountLine,
     InventoryItem,
     InventoryTransaction,
     PhysicalCount,
-    ShrinkageRate,
     Tenant,
 )
 from src.schemas.inventory import InventoryTransactionType
+from src.schemas.learning import FactorKind
 from src.services.shrinkage_service import compute_shrinkage_rates
 
 
@@ -31,7 +32,7 @@ def items(seeded_db, tenant):
         .where(Category.name == "ice_cream")
         .limit(1)
     )
-    
+
     topping = seeded_db.scalar(
         select(InventoryItem)
         .join(Category, InventoryItem.category_id == Category.id)
@@ -45,6 +46,22 @@ def items(seeded_db, tenant):
     seeded_db.flush()
 
     return {"ice_cream": ice_cream, "topping": topping}
+
+
+def _get_shrinkage_factors(session, tenant_id):
+    factors = session.scalars(
+        select(CorrectionFactor)
+        .where(CorrectionFactor.tenant_id == tenant_id)
+        .where(CorrectionFactor.kind == FactorKind.SHRINKAGE)
+    ).all()
+
+    cat_ids = [f.scope_key for f in factors]
+    categories = session.scalars(
+        select(Category).where(Category.id.in_(cat_ids))
+    ).all()
+    cat_map = {str(c.id): c.name for c in categories}
+
+    return {cat_map[f.scope_key]: f for f in factors}
 
 
 def _make_count(session, tenant, items, time, counts_dict):
@@ -90,9 +107,7 @@ class TestFirstCount:
 
         compute_shrinkage_rates(seeded_db, count.id, tenant.id)
 
-        rates = seeded_db.scalars(
-            select(ShrinkageRate).where(ShrinkageRate.tenant_id == tenant.id)
-        ).all()
+        rates = _get_shrinkage_factors(seeded_db, tenant.id)
         assert len(rates) == 0
 
 
@@ -119,19 +134,13 @@ class TestSecondCount:
 
         compute_shrinkage_rates(seeded_db, count2.id, tenant.id)
 
-        rates_rows = seeded_db.execute(
-            select(ShrinkageRate, Category.name.label("category_name"))
-            .join(Category, ShrinkageRate.category_id == Category.id)
-            .where(ShrinkageRate.tenant_id == tenant.id)
-        ).all()
+        rates = _get_shrinkage_factors(seeded_db, tenant.id)
 
-        rates = {row.category_name: row.ShrinkageRate for row in rates_rows}
+        assert float(rates["ice_cream"].value) == pytest.approx(0.1, abs=0.001)
+        assert rates["ice_cream"].evidence_count == 1
 
-        assert rates["ice_cream"].rate == pytest.approx(Decimal("0.1"), abs=Decimal("0.001"))
-        assert rates["ice_cream"].sample_count == 1
-
-        assert rates["toppings"].rate == pytest.approx(Decimal("0.25"), abs=Decimal("0.001"))
-        assert rates["toppings"].sample_count == 1
+        assert float(rates["toppings"].value) == pytest.approx(0.25, abs=0.001)
+        assert rates["toppings"].evidence_count == 1
 
     def test_no_negative_discrepancy_skips_category(self, seeded_db, tenant, items):
         t1 = datetime.now(UTC) - timedelta(days=7)
@@ -152,9 +161,7 @@ class TestSecondCount:
 
         compute_shrinkage_rates(seeded_db, count2.id, tenant.id)
 
-        rates = seeded_db.scalars(
-            select(ShrinkageRate).where(ShrinkageRate.tenant_id == tenant.id)
-        ).all()
+        rates = _get_shrinkage_factors(seeded_db, tenant.id)
         assert len(rates) == 0
 
     def test_no_depletions_skips_category(self, seeded_db, tenant, items):
@@ -174,14 +181,12 @@ class TestSecondCount:
 
         compute_shrinkage_rates(seeded_db, count2.id, tenant.id)
 
-        rates = seeded_db.scalars(
-            select(ShrinkageRate).where(ShrinkageRate.tenant_id == tenant.id)
-        ).all()
+        rates = _get_shrinkage_factors(seeded_db, tenant.id)
         assert len(rates) == 0
 
 
 class TestRunningAverage:
-    def test_third_count_updates_average(self, seeded_db, tenant, items):
+    def test_third_count_updates_with_ewma(self, seeded_db, tenant, items):
         t1 = datetime.now(UTC) - timedelta(days=14)
         t2 = t1 + timedelta(days=7)
         t3 = datetime.now(UTC)
@@ -207,12 +212,9 @@ class TestRunningAverage:
         })
         compute_shrinkage_rates(seeded_db, count3.id, tenant.id)
 
-        rate = seeded_db.scalar(
-            select(ShrinkageRate)
-            .join(Category, ShrinkageRate.category_id == Category.id)
-            .where(ShrinkageRate.tenant_id == tenant.id)
-            .where(Category.name == "ice_cream")
-        )
+        rates = _get_shrinkage_factors(seeded_db, tenant.id)
+        ice_cream = rates["ice_cream"]
 
-        assert rate.rate == pytest.approx(Decimal("0.1"), abs=Decimal("0.001"))
-        assert rate.sample_count == 2
+        assert ice_cream.evidence_count == 2
+        # Both observations are 0.1, so EWMA should stay near 0.1
+        assert float(ice_cream.value) == pytest.approx(0.1, abs=0.01)

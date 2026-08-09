@@ -7,9 +7,11 @@ from src.db.models import (
     InventoryItem,
     InventoryTransaction,
     PhysicalCount,
-    ShrinkageRate,
 )
 from src.schemas.inventory import SUBTRACT_TYPES
+from src.schemas.learning import FactorKind
+from src.services.config_services import resolve_config
+from src.services.learning_service import update_factor
 
 
 def compute_shrinkage_rates(session: Session, physical_count_id, tenant_id):
@@ -71,36 +73,25 @@ def compute_shrinkage_rates(session: Session, physical_count_id, tenant_id):
 
     depletion_map = {row.category_id: abs(row.total_depletion) for row in depletions}
 
+    config = resolve_config(str(current_count.tenant_id), session)
+
     for row in discrepancies:
         depleted = depletion_map.get(row.category_id)
 
         if not depleted:
             continue
 
-        new_observation = abs(row.total_discrepancy) / depleted
+        observation = float(abs(row.total_discrepancy) / depleted)
 
-        existing = session.scalar(
-            select(ShrinkageRate)
-            .where(ShrinkageRate.tenant_id == current_count.tenant_id)
-            .where(ShrinkageRate.category_id == row.category_id)
+        update_factor(
+            session,
+            str(current_count.tenant_id),
+            FactorKind.SHRINKAGE,
+            str(row.category_id),
+            observation,
+            config.learning.shrinkage_half_life,
+            config.learning.shrinkage_clamp_low,
+            config.learning.shrinkage_clamp_high,
+            current_count.counted_at.date(),
+            default_value=0.0,
         )
-
-        if existing:
-            updated_rate = (existing.rate * existing.sample_count + new_observation) / (
-                existing.sample_count + 1
-            )
-            existing.rate = updated_rate
-            existing.sample_count += 1
-            existing.last_updated = current_count.counted_at
-        else:
-            session.add(
-                ShrinkageRate(
-                    tenant_id=current_count.tenant_id,
-                    category_id=row.category_id,
-                    rate=new_observation,
-                    sample_count=1,
-                    last_updated=current_count.counted_at,
-                )
-            )
-
-    session.flush()
