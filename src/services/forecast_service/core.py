@@ -5,6 +5,8 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+from lightgbm import LGBMRegressor
+from sklearn.base import BaseEstimator
 from sklearn.linear_model import PoissonRegressor
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
@@ -13,6 +15,7 @@ from sqlalchemy.orm import Session
 from src.db.models import (
     DailyActual,
     Forecast,
+    ModelRegistry,
     SaleLineItem,
     SaleTransaction,
     Tenant,
@@ -206,9 +209,13 @@ def build_features(
     }
 
 
-def train_glm(
-    session: Session, tenant_id: str, series: str, cutoff_date: date | None = None
-):
+def _train_model(
+    session: Session,
+    tenant_id: str,
+    series: str,
+    model: BaseEstimator,
+    cutoff_date: date | None = None,
+) -> tuple | None:
     query = (
         select(DailyActual)
         .where(DailyActual.tenant_id == tenant_id)
@@ -241,12 +248,35 @@ def train_glm(
         return
     df = pd.DataFrame(features)
     df = pd.get_dummies(df, columns=["day_of_week", "month"])
-    model = PoissonRegressor()
     model.fit(df, targets)
     return model, df.columns.tolist()
 
 
-def forecast_glm(session: Session, tenant_id: str, as_of_date: str):
+def train_glm(
+    session: Session, tenant_id: str, series: str, cutoff_date: date | None = None
+):
+    return _train_model(session, tenant_id, series, PoissonRegressor(), cutoff_date)
+
+
+def train_lgbm(
+    session: Session, tenant_id: str, series: str, cutoff_date: date | None = None
+):
+    return _train_model(
+        session,
+        tenant_id,
+        series,
+        LGBMRegressor(n_estimators=50, num_leaves=8, min_child_samples=5, verbose=-1),
+        cutoff_date,
+    )
+
+
+TRAIN_DISPATCH = {
+    ModelVersion.POISSON_GLM.value: train_glm,
+    ModelVersion.LIGHTGBM.value: train_lgbm,
+}
+
+
+def _forecast_data(session: Session, tenant_id: str, as_of_date: str, model_name: str):
     series_lst = session.scalars(
         select(DailyActual.series).where(DailyActual.tenant_id == tenant_id).distinct()
     ).all()
@@ -257,15 +287,24 @@ def forecast_glm(session: Session, tenant_id: str, as_of_date: str):
     as_of_date = date.fromisoformat(as_of_date)
 
     for series in series_lst:
-        result = train_glm(session, tenant_id, series, as_of_date)
+        result = TRAIN_DISPATCH[model_name](session, tenant_id, series, as_of_date)
 
         if result is None:
             continue
 
         model, columns = result
         quantile_grid = compute_quantile_grid(
-            session, tenant_id, ModelVersion.POISSON_GLM.value, as_of_date
+            session, tenant_id, model_name, as_of_date
         )
+
+        active_model = session.scalar(
+            select(ModelRegistry.active_version)
+            .where(ModelRegistry.tenant_id == tenant_id)
+            .where(ModelRegistry.series == series)
+        )
+
+        if not active_model:
+            active_model = ModelVersion.POISSON_GLM.value
 
         for offset in range(1, FORECAST_HORIZON + 1):
             target_date = as_of_date + timedelta(days=offset)
@@ -280,8 +319,14 @@ def forecast_glm(session: Session, tenant_id: str, as_of_date: str):
             df = pd.get_dummies(df, columns=["day_of_week", "month"])
             df = df.reindex(columns=columns, fill_value=0)
             prediction = model.predict(df)[0]
-            bias = get_factor(session, tenant_id, FactorKind.FORECAST_BIAS, series)
-            prediction = prediction * float(bias)
+            if model_name == active_model:
+                bias = get_factor(
+                    session,
+                    tenant_id,
+                    FactorKind.FORECAST_BIAS,
+                    f"{series}:{active_model}",
+                )
+                prediction = prediction * float(bias)
 
             bucket_dict = None
             if quantile_grid:
@@ -299,7 +344,7 @@ def forecast_glm(session: Session, tenant_id: str, as_of_date: str):
                 tenant_id=tenant_id,
                 series=series,
                 target_date=target_date,
-                model_version=ModelVersion.POISSON_GLM.value,
+                model_version=model_name,
                 point_estimate=prediction,
                 forecast_date=as_of_date,
                 quantile_grid=bucket_dict,
@@ -318,6 +363,20 @@ def forecast_glm(session: Session, tenant_id: str, as_of_date: str):
         session.commit()
 
 
+def forecast_glm(session: Session, tenant_id: str, as_of_date: str):
+    _forecast_data(session, tenant_id, as_of_date, ModelVersion.POISSON_GLM.value)
+
+
+def forecast_lgbm(session: Session, tenant_id: str, as_of_date: str):
+    _forecast_data(session, tenant_id, as_of_date, ModelVersion.LIGHTGBM.value)
+
+
+FORECAST_DISPATCH = {
+    ModelVersion.POISSON_GLM.value: forecast_glm,
+    ModelVersion.LIGHTGBM.value: forecast_lgbm,
+}
+
+
 def backtest(
     session: Session, tenant_id: str, start_date: str, end_date: str, models: list[str]
 ):
@@ -329,8 +388,7 @@ def backtest(
         forecast_seasonal_naive(session, tenant_id, str(current_date))
         forecast_trailing_mean(session, tenant_id, str(current_date))
         for model in models:
-            if model == ModelVersion.POISSON_GLM:
-                forecast_glm(session, tenant_id, str(current_date))
+            FORECAST_DISPATCH[model](session, tenant_id, str(current_date))
         compute_forecast_metrics(session, tenant_id, str(current_date))
 
 
@@ -347,33 +405,41 @@ def update_forecast_bias(session: Session, tenant_id: str, business_date: str):
 
     series_lst = [actual.series for actual in actuals]
 
-    forecasts = session.scalars(
-        select(Forecast)
-        .where(Forecast.target_date == business_date)
-        .where(Forecast.tenant_id == tenant_id)
-        .where(Forecast.model_version == ModelVersion.POISSON_GLM.value)
-        .order_by(Forecast.forecast_date.desc())
-    ).all()
-
-    if not forecasts:
-        return
-
-    actual_map = {a.series: float(a.value) for a in actuals}
-    forecast_map = {}
-    for f in forecasts:
-        if f.series not in forecast_map:
-            forecast_map[f.series] = float(f.point_estimate)
-
     config = resolve_config(tenant_id, session)
 
     for series in series_lst:
+        active_model = session.scalar(
+            select(ModelRegistry.active_version)
+            .where(ModelRegistry.tenant_id == tenant_id)
+            .where(ModelRegistry.series == series)
+        )
+
+        if not active_model:
+            active_model = ModelVersion.POISSON_GLM.value
+
+        forecasts = session.scalars(
+            select(Forecast)
+            .where(Forecast.target_date == business_date)
+            .where(Forecast.tenant_id == tenant_id)
+            .where(Forecast.model_version == active_model)
+            .order_by(Forecast.forecast_date.desc())
+        ).all()
+
+        if not forecasts:
+            continue
+
+        actual_map = {a.series: float(a.value) for a in actuals}
+        forecast_map = {}
+        for f in forecasts:
+            if f.series not in forecast_map:
+                forecast_map[f.series] = float(f.point_estimate)
         predicted = forecast_map.get(series)
         actual = actual_map.get(series)
 
         if predicted is None or actual is None or predicted <= 0 or actual <= 0:
             continue
 
-        bias = get_factor(session, tenant_id, FactorKind.FORECAST_BIAS, series)
+        bias = get_factor(session, tenant_id, FactorKind.FORECAST_BIAS, f"{series}:{active_model}")
         raw_prediction = predicted / float(bias)
 
         if raw_prediction <= 0:
@@ -385,7 +451,7 @@ def update_forecast_bias(session: Session, tenant_id: str, business_date: str):
             session,
             tenant_id,
             FactorKind.FORECAST_BIAS,
-            series,
+            f"{series}:{active_model}",
             observation,
             config.learning.forecast_bias_half_life,
             config.learning.forecast_bias_clamp_low,

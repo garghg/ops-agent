@@ -10,7 +10,6 @@ from src.db.models import (
     Forecast,
     ForecastMetric,
 )
-from src.schemas.models import ModelVersion
 from src.services.forecast_service.config import (
     COVERAGE_LOWER_BOUND,
     COVERAGE_UPPER_BOUND,
