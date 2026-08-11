@@ -18,8 +18,9 @@ from src.schemas.forecast import ForecastSeries
 from src.schemas.models import ModelVersion
 from src.schemas.schedule import ScheduleStatus
 from src.services.scheduling_service import (
-    required_per_hour,
-    solve_schedule,
+    _time_to_minutes,
+    make_schedule,
+    required_per_slot,
 )
 
 
@@ -91,20 +92,20 @@ def forecast_data(seeded_db, tenant):
     return week_start
 
 
-class TestRequiredPerHour:
+class TestRequiredPerSlot:
     def test_returns_grid_for_each_slot(self, seeded_db, tenant, forecast_data):
-        grid = required_per_hour(seeded_db, str(tenant.id), forecast_data)
+        grid = required_per_slot(seeded_db, str(tenant.id), forecast_data)
         assert grid is not None
-        # 7 days × 8 hours = 56 slots
-        assert len(grid) == 56
+        # 7 days × 8 hours = 224 slots (at default 15-min slot length)
+        assert len(grid) == 224
 
     def test_values_are_at_least_min_staffing(self, seeded_db, tenant, forecast_data):
-        grid = required_per_hour(seeded_db, str(tenant.id), forecast_data)
+        grid = required_per_slot(seeded_db, str(tenant.id), forecast_data)
         for val in grid.values():
-            assert val >= 1  # min_staffing default
+            assert val >= 1
 
     def test_returns_none_without_forecasts(self, seeded_db, tenant):
-        result = required_per_hour(seeded_db, str(tenant.id), date(2026, 8, 10))
+        result = required_per_slot(seeded_db, str(tenant.id), date(2026, 8, 10))
         assert result is None
 
     def test_returns_none_without_profiles(self, seeded_db, tenant):
@@ -118,13 +119,13 @@ class TestRequiredPerHour:
             forecast_date=week_start - timedelta(days=1),
         ))
         seeded_db.flush()
-        result = required_per_hour(seeded_db, str(tenant.id), week_start)
+        result = required_per_slot(seeded_db, str(tenant.id), week_start)
         assert result is None
 
 
-class TestSolveSchedule:
+class TestMakeSchedule:
     def test_produces_proposed_schedule(self, seeded_db, tenant, staff, forecast_data):
-        result = solve_schedule(seeded_db, str(tenant.id), forecast_data)
+        result = make_schedule(seeded_db, str(tenant.id), forecast_data)
         assert result["status"] == ScheduleStatus.PROPOSED.value
 
         schedule = seeded_db.scalar(
@@ -134,7 +135,7 @@ class TestSolveSchedule:
         assert schedule.status == ScheduleStatus.PROPOSED.value
 
     def test_creates_shifts(self, seeded_db, tenant, staff, forecast_data):
-        solve_schedule(seeded_db, str(tenant.id), forecast_data)
+        make_schedule(seeded_db, str(tenant.id), forecast_data)
 
         schedule = seeded_db.scalar(
             select(Schedule).where(Schedule.tenant_id == tenant.id)
@@ -145,7 +146,7 @@ class TestSolveSchedule:
         assert len(shifts) > 0
 
     def test_shifts_respect_availability(self, seeded_db, tenant, staff, forecast_data):
-        solve_schedule(seeded_db, str(tenant.id), forecast_data)
+        make_schedule(seeded_db, str(tenant.id), forecast_data)
 
         schedule = seeded_db.scalar(
             select(Schedule).where(Schedule.tenant_id == tenant.id)
@@ -158,7 +159,7 @@ class TestSolveSchedule:
             assert shift.shift_date.weekday() != 6
 
     def test_shifts_respect_min_shift_length(self, seeded_db, tenant, staff, forecast_data):
-        solve_schedule(seeded_db, str(tenant.id), forecast_data)
+        make_schedule(seeded_db, str(tenant.id), forecast_data)
 
         schedule = seeded_db.scalar(
             select(Schedule).where(Schedule.tenant_id == tenant.id)
@@ -168,11 +169,11 @@ class TestSolveSchedule:
         ).all()
 
         for shift in shifts:
-            duration = shift.end_time.hour - shift.start_time.hour
-            assert duration >= 3
+            duration_mins = _time_to_minutes(shift.end_time) - _time_to_minutes(shift.start_time)
+            assert duration_mins >= 3 * 60
 
     def test_shifts_respect_max_shift_length(self, seeded_db, tenant, staff, forecast_data):
-        solve_schedule(seeded_db, str(tenant.id), forecast_data)
+        make_schedule(seeded_db, str(tenant.id), forecast_data)
 
         schedule = seeded_db.scalar(
             select(Schedule).where(Schedule.tenant_id == tenant.id)
@@ -182,8 +183,8 @@ class TestSolveSchedule:
         ).all()
 
         for shift in shifts:
-            duration = shift.end_time.hour - shift.start_time.hour
-            assert duration <= 8
+            duration_mins = _time_to_minutes(shift.end_time) - _time_to_minutes(shift.start_time)
+            assert duration_mins <= 8 * 60
 
     def test_respects_exception_block(self, seeded_db, tenant, staff, forecast_data):
         monday = forecast_data
@@ -194,7 +195,7 @@ class TestSolveSchedule:
         ))
         seeded_db.flush()
 
-        solve_schedule(seeded_db, str(tenant.id), forecast_data)
+        make_schedule(seeded_db, str(tenant.id), forecast_data)
 
         schedule = seeded_db.scalar(
             select(Schedule).where(Schedule.tenant_id == tenant.id)
@@ -210,7 +211,7 @@ class TestSolveSchedule:
         assert len(alice_monday) == 0
 
     def test_fails_with_no_employees(self, seeded_db, tenant, forecast_data):
-        result = solve_schedule(seeded_db, str(tenant.id), forecast_data)
+        result = make_schedule(seeded_db, str(tenant.id), forecast_data)
         assert result["status"] == ScheduleStatus.FAILED.value
 
     def test_fails_with_no_availability(self, seeded_db, tenant, forecast_data):
@@ -222,7 +223,7 @@ class TestSolveSchedule:
             max_shift_hours=8,
         ))
         seeded_db.flush()
-        result = solve_schedule(seeded_db, str(tenant.id), forecast_data)
+        result = make_schedule(seeded_db, str(tenant.id), forecast_data)
         assert result["status"] == ScheduleStatus.FAILED.value
 
     def test_shortfall_reported_when_understaffed(self, seeded_db, tenant, forecast_data):
@@ -245,5 +246,5 @@ class TestSolveSchedule:
             ))
         seeded_db.flush()
 
-        result = solve_schedule(seeded_db, str(tenant.id), forecast_data)
+        result = make_schedule(seeded_db, str(tenant.id), forecast_data)
         assert result["shortfalls"]

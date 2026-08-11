@@ -12,7 +12,7 @@ class ScheduleConfig(BaseModel):
     poll_interval_seconds: int = 10800
     service_rate: int = 10
     min_staffing: int = 2
-    slot_length_minutes: int = 60
+    slot_length_minutes: int = 15
 
 
 class AlertThresholds(BaseModel):
