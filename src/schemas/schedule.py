@@ -6,3 +6,8 @@ class ScheduleStatus(str, Enum):
     APPROVED = "approved"
     PUBLISHED = "published"
     FAILED = "failed"
+    
+class Constraints(str, Enum):
+    KEYHOLDER = "keyholder"
+    MAX_WEEKLY_HOURS = "max_weekly_hours"
+    SHIFT_LENGTH = "shift_length"
