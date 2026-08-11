@@ -5,3 +5,4 @@ class ScheduleStatus(str, Enum):
     PROPOSED = "proposed"
     APPROVED = "approved"
     PUBLISHED = "published"
+    FAILED = "failed"

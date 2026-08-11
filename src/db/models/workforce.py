@@ -39,7 +39,7 @@ class Employee(Base):
     max_weekly_hours: Mapped[int] = mapped_column(Integer, nullable=False)
     min_shift_hours: Mapped[int] = mapped_column(Integer, nullable=False)
     max_shift_hours: Mapped[int] = mapped_column(Integer, nullable=False)
-    min_rest_hours: Mapped[int] = mapped_column(Integer, nullable=False)
+    min_rest_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )
