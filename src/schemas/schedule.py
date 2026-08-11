@@ -16,3 +16,7 @@ class ScheduleEditType(str, Enum):
     SHIFT_ADD = "shift_add"
     SHIFT_REMOVE = "shift_remove"
     SHIFT_MODIFY = "shift_modify"
+    
+class DayPart(str, Enum):
+    MORNING = "morning"
+    AFTERNOON = "afternoon"

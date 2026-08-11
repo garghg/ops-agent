@@ -15,12 +15,15 @@ from src.db.models import (
     IntradayProfile,
     ModelRegistry,
     Schedule,
+    ScheduleEdit,
     Shift,
 )
 from src.schemas.forecast import ForecastSeries
+from src.schemas.learning import FactorKind
 from src.schemas.models import ModelVersion
-from src.schemas.schedule import Constraints, ScheduleStatus
+from src.schemas.schedule import Constraints, DayPart, ScheduleEditType, ScheduleStatus
 from src.services.config_services import resolve_config
+from src.services.learning_service import update_factor
 
 
 def _time_to_minutes(t: time) -> int:
@@ -366,3 +369,115 @@ def diagnose_shortfalls(
                 "slots": slots,
             }
     return results
+
+
+def calibrate_staffing(session: Session, tenant_id: str, week_start: date):
+    DAY_SPLIT = 12
+    MIN_PROPOSED_FOR_CALIBRATION = 2
+
+    edits = session.scalars(
+        select(ScheduleEdit)
+        .join(Schedule, Schedule.id == ScheduleEdit.schedule_id)
+        .where(Schedule.week_start == week_start)
+        .where(Schedule.tenant_id == tenant_id)
+    ).all()
+
+    if not edits:
+        return
+
+    scores = {}
+
+    for edit in edits:
+        score = None
+        daypart = DayPart.MORNING.value
+        shift_date = edit.details.get("shift_date")
+        if edit.edit_type != ScheduleEditType.SHIFT_MODIFY.value:
+            start_time = edit.details.get("start_time")
+        else:
+            start_time = edit.details.get("new_start_time")
+
+        if not (shift_date and start_time):
+            continue
+
+        shift_date = date.fromisoformat(shift_date)
+        start_time = time.fromisoformat(start_time)
+
+        if start_time.hour >= DAY_SPLIT:
+            daypart = DayPart.AFTERNOON.value
+
+        weekday = shift_date.weekday()
+
+        if edit.edit_type == ScheduleEditType.SHIFT_ADD.value:
+            score = 1
+
+        elif edit.edit_type == ScheduleEditType.SHIFT_REMOVE.value:
+            score = -1
+
+        elif edit.edit_type == ScheduleEditType.SHIFT_MODIFY.value:
+            prev_end_time = edit.details.get("prev_end_time")
+            prev_start_time = edit.details.get("prev_start_time")
+            new_end_time = edit.details.get("new_end_time")
+            new_start_time = edit.details.get("new_start_time")
+
+            if not (
+                prev_end_time and prev_start_time and new_start_time and new_end_time
+            ):
+                continue
+
+            old_duration = _time_to_minutes(
+                time.fromisoformat(prev_end_time)
+            ) - _time_to_minutes(time.fromisoformat(prev_start_time))
+
+            new_duration = _time_to_minutes(
+                time.fromisoformat(new_end_time)
+            ) - _time_to_minutes(time.fromisoformat(new_start_time))
+
+            if new_duration > old_duration:
+                score = 1
+            elif new_duration < old_duration:
+                score = -1
+
+        if score is not None:
+            scores[f"{weekday}:{daypart}"] = (
+                scores.get(f"{weekday}:{daypart}", 0) + score
+            )
+
+    shifts = session.scalars(
+        select(Shift)
+        .join(Schedule, Schedule.id == Shift.schedule_id)
+        .where(Schedule.week_start == week_start)
+        .where(Schedule.tenant_id == tenant_id)
+    ).all()
+
+    current_counts = {}
+    for shift in shifts:
+        daypart = (
+            DayPart.MORNING.value
+            if shift.start_time.hour < DAY_SPLIT
+            else DayPart.AFTERNOON.value
+        )
+        key = f"{shift.shift_date.weekday()}:{daypart}"
+        current_counts[key] = current_counts.get(key, 0) + 1
+
+    config = resolve_config(tenant_id, session)
+
+    for scope_key, net in scores.items():
+        if net == 0:
+            continue
+        current = current_counts.get(scope_key, 0)
+        original = current - net
+        if original < MIN_PROPOSED_FOR_CALIBRATION:
+            continue
+        observation = current / original
+        weekday = int(scope_key.split(":")[0])
+        update_factor(
+            session=session,
+            tenant_id=tenant_id,
+            kind=FactorKind.STAFFING_RATIO,
+            scope_key=scope_key,
+            observation=observation,
+            half_life=config.learning.staff_half_life,
+            clamp_low=config.learning.staff_clamp_low,
+            clamp_high=config.learning.staff_clamp_high,
+            business_date=week_start + timedelta(days=weekday),
+        )

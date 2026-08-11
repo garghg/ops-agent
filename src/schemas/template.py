@@ -45,6 +45,9 @@ class LearningConfig(BaseModel):
     shrinkage_half_life: int = 4
     shrinkage_clamp_low: float = 0.0
     shrinkage_clamp_high: float = 0.30
+    staff_half_life: int = 4
+    staff_clamp_low: float = 0.7
+    staff_clamp_high: float = 1.40
     clamp_alert_threshold: int = 5
 
 class TemplateConfig(BaseModel):
