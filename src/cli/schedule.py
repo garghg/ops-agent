@@ -41,7 +41,11 @@ def _print_schedule(
     ).all()
 
     emp_ids = {s.employee_id for s in shifts}
-    employees = session.scalars(select(Employee).where(Employee.id.in_(emp_ids))).all()
+    employees = session.scalars(
+        select(Employee)
+        .where(Employee.tenant_id == tenant_id)
+        .where(Employee.id.in_(emp_ids))
+    ).all()
     emp_map = {e.id: e.name for e in employees}
 
     table = Table(
@@ -191,6 +195,22 @@ def add():
     start = time.fromisoformat(Prompt.ask("Start time (HH:MM) [24-hr format]"))
     end = time.fromisoformat(Prompt.ask("End time (HH:MM) [24-hr format]"))
 
+    existing = session.scalar(
+        select(Shift)
+        .where(Shift.employee_id == emp.id)
+        .where(Shift.shift_date == shift_date)
+        .where(Shift.schedule_id == schedule.id)
+        .where(Shift.start_time < end)
+        .where(Shift.end_time > start)
+    )
+
+    if existing:
+        console.print(
+            f"[red]{emp.name} already has a shift on {shift_date} "
+            f"from {existing.start_time.strftime('%I:%M %p')} - {existing.end_time.strftime('%I:%M %p')}[/red]"
+        )
+        return
+
     shift = Shift(
         schedule_id=schedule.id,
         employee_id=emp.id,
@@ -249,7 +269,11 @@ def _select_shift(session: Session, tenant_id: str, console: Console):
         return
 
     emp_ids = {s.employee_id for s in shifts}
-    employees = session.scalars(select(Employee).where(Employee.id.in_(emp_ids))).all()
+    employees = session.scalars(
+        select(Employee)
+        .where(Employee.tenant_id == tenant_id)
+        .where(Employee.id.in_(emp_ids))
+    ).all()
     emp_map = {e.id: e.name for e in employees}
 
     for i, shift in enumerate(shifts, 1):
@@ -320,6 +344,23 @@ def modify():
 
     new_start = time.fromisoformat(Prompt.ask("Start time (HH:MM) [24-hr format]"))
     new_end = time.fromisoformat(Prompt.ask("End time (HH:MM) [24-hr format]"))
+
+    existing = session.scalar(
+        select(Shift)
+        .where(Shift.employee_id == shift.employee_id)
+        .where(Shift.shift_date == shift.shift_date)
+        .where(Shift.schedule_id == schedule.id)
+        .where(Shift.id != shift.id)
+        .where(Shift.start_time < new_end)
+        .where(Shift.end_time > new_start)
+    )
+
+    if existing:
+        console.print(
+            f"[red]Overlaps with existing shift "
+            f"{existing.start_time.strftime('%I:%M %p')} – {existing.end_time.strftime('%I:%M %p')}[/red]"
+        )
+        return
 
     old_start = shift.start_time
     old_end = shift.end_time

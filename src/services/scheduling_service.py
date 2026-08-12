@@ -81,8 +81,8 @@ def required_per_slot(
     forecast_map = {}
     for f in forecasts:
         if f.target_date not in forecast_map:
-            forecast_map[f.target_date] = f.point_estimate
-    demand_map = {(d.day_of_week, d.hour): d.fraction for d in demands}
+            forecast_map[f.target_date] = float(f.point_estimate)
+    demand_map = {(d.day_of_week, d.hour): float(d.fraction) for d in demands}
 
     config = resolve_config(tenant_id, session)
     open_minutes = config.schedule.opening_hour * 60 + config.schedule.opening_min

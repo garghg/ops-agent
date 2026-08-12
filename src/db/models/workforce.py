@@ -157,6 +157,15 @@ class Schedule(Base):
 
 class Shift(Base):
     __tablename__ = "shifts"
+    __table_args__ = (
+        UniqueConstraint(
+          "employee_id",
+          "schedule_id",
+          "shift_date",
+          "start_time",
+          name="shifts_employee_schedule_shift_start_time_key"  
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
