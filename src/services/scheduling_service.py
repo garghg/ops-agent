@@ -23,7 +23,9 @@ from src.schemas.learning import FactorKind
 from src.schemas.models import ModelVersion
 from src.schemas.schedule import Constraints, DayPart, ScheduleEditType, ScheduleStatus
 from src.services.config_services import resolve_config
-from src.services.learning_service import update_factor
+from src.services.learning_service import get_factor, update_factor
+
+DAY_SPLIT = 12
 
 
 def _time_to_minutes(t: time) -> int:
@@ -97,10 +99,22 @@ def required_per_slot(
         weekday = day.weekday()
         for slot in range(open_minutes, close_minutes, slot_length_mins):
             fraction = demand_map.get((weekday, slot // 60), 0)
-            required[(day, slot)] = max(
-                ceil(forecast * fraction / slots_per_hour / service_rate),
-                min_staffing,
+            daypart = (
+                DayPart.MORNING.value
+                if slot // 60 < DAY_SPLIT
+                else DayPart.AFTERNOON.value
             )
+            factor = get_factor(
+                session,
+                tenant_id,
+                FactorKind.STAFFING_RATIO,
+                f"{weekday}:{daypart}",
+                default=1.0,
+            )
+            slot_demand = forecast * fraction / slots_per_hour
+            raw_staff_required = slot_demand / service_rate
+            adjusted = raw_staff_required * float(factor)
+            required[(day, slot)] = max(ceil(adjusted), min_staffing)
 
     return required
 
@@ -372,7 +386,6 @@ def diagnose_shortfalls(
 
 
 def calibrate_staffing(session: Session, tenant_id: str, week_start: date):
-    DAY_SPLIT = 12
     MIN_PROPOSED_FOR_CALIBRATION = 2
 
     edits = session.scalars(

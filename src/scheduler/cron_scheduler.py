@@ -3,6 +3,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from src.logging import setup_logging
 from src.scheduler.jobs import (
+    calibrate_schedule,
     check_system_health,
     poll_autonomy,
     poll_models,
@@ -19,6 +20,7 @@ scheduler.add_job(check_system_health, CronTrigger(minute="*/5"))
 scheduler.add_job(poll_proposals, CronTrigger(hour="*/2"))
 scheduler.add_job(poll_autonomy, CronTrigger(hour="*"))
 scheduler.add_job(poll_models, CronTrigger(day_of_week="0"))
+scheduler.add_job(calibrate_schedule, CronTrigger(day_of_week="0"))
 
 if __name__ == "__main__":
     setup_logging()
