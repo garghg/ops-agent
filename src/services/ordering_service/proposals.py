@@ -188,14 +188,27 @@ def generate_proposals(
                 shortfall = s - position
                 mode = PredictionMode.FORECAST.value
 
-            edit_bias = Decimal(get_factor(session, tenant_id, FactorKind.ORDER_EDIT_BIAS, str(si.id)))
+            edit_bias = Decimal(
+                get_factor(session, tenant_id, FactorKind.ORDER_EDIT_BIAS, str(si.id))
+            )
             shortfall *= edit_bias
-            
+
             quantity_ordered = max(
                 0,
                 ceil((shortfall) / si.pack_size) * si.pack_size,
             )
             unit_cost = si.cost_per_unit
+
+            shelf_cap = None
+            if inv_item.shelf_life_days and mode == PredictionMode.FORECAST.value:
+                total_days = (end_date - start_date).days + 1
+                daily_demand = aggregate_pe / Decimal(total_days)
+                max_stock = Decimal(inv_item.shelf_life_days) * daily_demand
+                shelf_cap = max(
+                    0,
+                    ceil((max_stock - position) / si.pack_size) * si.pack_size,
+                )
+                quantity_ordered = min(quantity_ordered, shelf_cap)
 
             if quantity_ordered == 0:
                 continue
@@ -223,6 +236,7 @@ def generate_proposals(
                 "target_quantity": float(inv_item.target_quantity)
                 if qk is None
                 else None,
+                "shelf_life_cap": float(shelf_cap) if shelf_cap is not None else None,
             }
 
             session.add(

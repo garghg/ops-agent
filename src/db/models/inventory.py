@@ -5,6 +5,7 @@ from decimal import Decimal
 from sqlalchemy import (
     CheckConstraint,
     ForeignKey,
+    Integer,
     Numeric,
     Text,
     UniqueConstraint,
@@ -51,7 +52,7 @@ class InventoryItem(Base):
     reorder_point: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     target_quantity: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     cost_per_unit: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-    shelf_life_days: Mapped[int | None] = mapped_column()
+    shelf_life_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     last_restocked_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
