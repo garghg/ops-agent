@@ -23,6 +23,7 @@ from src.schemas.learning import FactorKind
 from src.schemas.orders import OrderBy, PredictionMode
 from src.schemas.suppliers import POStatus
 from src.services.config_services import resolve_config
+from src.services.cost_service import compute_newsvendor_ratios
 from src.services.learning_service import get_factor
 from src.services.ordering_service import (
     autonomy_checks,
@@ -34,6 +35,7 @@ from src.services.ordering_service import (
 def generate_proposals(
     session: Session, tenant_id, item_ids: list[str]
 ) -> list[PurchaseOrder]:
+    ratios = compute_newsvendor_ratios(session, tenant_id)
     po_placed = session.execute(
         select(POLine, PurchaseOrder)
         .join(PurchaseOrder, POLine.purchase_order_id == PurchaseOrder.id)
@@ -182,7 +184,13 @@ def generate_proposals(
             )
 
             if aggregates:
-                qk = f"p{int(config.ordering.default_service_level * 100)}"
+                if inv_item.shelf_life_days and inv_item.id in ratios:
+                    ratio_pct = int(ratios[inv_item.id] * 100)
+                    available = [5, 20, 50, 80, 90, 95]
+                    level = max(l for l in available if l <= ratio_pct)
+                    qk = f"p{level:02d}"
+                else:
+                    qk = f"p{int(config.ordering.default_service_level * 100)}"
                 aggregate_pe, aggregate_qg = aggregates
                 s = aggregate_qg[qk]
                 shortfall = s - position
