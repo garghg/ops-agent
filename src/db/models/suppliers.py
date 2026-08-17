@@ -96,6 +96,31 @@ class SupplierItem(Base):
     )
 
 
+class SupplierItemCostHistory(Base):
+    __tablename__ = "supplier_item_cost_history"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    supplier_item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("supplier_items.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    old_cost: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    new_cost: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    effective_date: Mapped[date] = mapped_column(Date, nullable=False)
+    trigger_source: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class PurchaseOrder(Base):
     __tablename__ = "purchase_orders"
     __table_args__ = (

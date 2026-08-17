@@ -13,6 +13,7 @@ dependencies = [
     "numpy>=2.5.1",
     "ortools>=9.15.6755",
     "pandas>=3.0.5",
+    "psycopg2-binary>=2.9.12",
     "psycopg[binary]>=3.3.4",
     "pydantic>=2.13.4",
     "python-dotenv>=1.2.2",

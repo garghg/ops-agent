@@ -19,6 +19,7 @@ from src.db.models.forecasting import (
     ShareVector,
 )
 from src.db.models.inventory import Category, InventoryItem, InventoryTransaction
+from src.db.models.invoice import Invoice, InvoiceLine
 from src.db.models.learning import CorrectionFactor, FactorHistory
 from src.db.models.registry import BacktestResult, ModelRegistry
 from src.db.models.sales import SaleLineItem, SaleTransaction
@@ -28,6 +29,7 @@ from src.db.models.suppliers import (
     PurchaseOrder,
     Supplier,
     SupplierItem,
+    SupplierItemCostHistory,
 )
 from src.db.models.system import Heartbeat
 from src.db.models.weather import WeatherObservation
