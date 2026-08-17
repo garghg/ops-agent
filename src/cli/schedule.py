@@ -15,6 +15,7 @@ from src.services.scheduling_service import _minutes_to_time, make_schedule
 
 app = typer.Typer()
 edit_app = typer.Typer()
+app.add_typer(edit_app, name="edit")
 
 WEEKDAY_MAP = [
     "Monday",
