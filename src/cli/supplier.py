@@ -14,6 +14,8 @@ from src.db.models import (
     SupplierItem,
     SupplierItemCostHistory,
 )
+from src.services.config_services import resolve_config
+from src.services.cost_service import compute_newsvendor_ratios
 
 app = typer.Typer()
 console = Console()
@@ -113,7 +115,18 @@ def update_cost():
         effective_date=today,
         trigger_source="manual",
     ))
+
     si.cost_per_unit = new_cost
+    inv.cost_per_unit = new_cost
 
     session.commit()
+    ratios = compute_newsvendor_ratios(session, str(tenant.id))
+    config = resolve_config(str(tenant.id), session)
+    if not config:
+        return
+
+    margin_floor = config.alerts.margin_floor
+    ratio = ratios.get(inv.id)
+    if ratio and ratio < Decimal(str(margin_floor)):
+        console.print(f"[red]Warning: {inv.name} margin below floor — ratio {ratio:.2f} (floor: {margin_floor})[/red]")
     console.print(f"[green]Cost updated for {inv.name}.[/green]")
