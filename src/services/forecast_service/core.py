@@ -333,7 +333,7 @@ def _forecast_data(
             df = pd.DataFrame([features])
             df = pd.get_dummies(df, columns=["day_of_week", "month"])
             df = df.reindex(columns=columns, fill_value=0)
-            prediction = model.predict(df)[0]
+            prediction = float(model.predict(df)[0])
             if model_name == active_model:
                 bias = get_factor(
                     session,
