@@ -42,6 +42,7 @@ class InventoryEventType(str, Enum):
     BELOW_REORDER_POINT = "below_reorder_point"
     BOM_DEPLETION = "bom_depletion"
     ORDER_RECEIVED = "order_received"
+    SHRINKAGE_DEPLETION = "shrinkage_depletion"
 
 
 class ProcurementEventType(str, Enum):

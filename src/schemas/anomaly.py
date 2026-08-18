@@ -7,6 +7,7 @@ class AnomalyType:
     INTRADAY_PACE = "intraday_pace"
     CONDITION_CHANGE = "condition_change"
     MARGIN_FLOOR = "margin_floor"
+    COUNT_DISCREPANCY = "count_discrepancy"
     
 class AnomalySubject:
     TOTAL_UNITS = "total_units"

@@ -195,6 +195,15 @@ def generate_proposals(
                 s = aggregate_qg[qk]
                 shortfall = s - position
                 mode = PredictionMode.FORECAST.value
+                shrink_factor = get_factor(
+                    session,
+                    tenant_id,
+                    FactorKind.SHRINKAGE,
+                    str(inv_item.category_id),
+                    default=0.0,
+                )
+                if shrink_factor > 0:
+                    shortfall += aggregate_pe * Decimal(shrink_factor)
 
             edit_bias = Decimal(
                 get_factor(session, tenant_id, FactorKind.ORDER_EDIT_BIAS, str(si.id))
@@ -245,6 +254,9 @@ def generate_proposals(
                 if qk is None
                 else None,
                 "shelf_life_cap": float(shelf_cap) if shelf_cap is not None else None,
+                "shrinkage_factor": float(shrink_factor)
+                if mode == PredictionMode.FORECAST.value
+                else None,
             }
 
             session.add(

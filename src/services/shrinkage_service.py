@@ -1,3 +1,6 @@
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -7,11 +10,20 @@ from src.db.models import (
     InventoryItem,
     InventoryTransaction,
     PhysicalCount,
+    Tenant,
 )
-from src.schemas.inventory import SUBTRACT_TYPES
+from src.events.bus import publish_event
+from src.schemas.anomaly import AnomalyType
+from src.schemas.event import EventCategory, InventoryEventType
+from src.schemas.inventory import (
+    SUBTRACT_TYPES,
+    InventoryEventPayload,
+    InventoryTransactionType,
+)
 from src.schemas.learning import FactorKind
+from src.services.anomaly_service import persist_anomaly
 from src.services.config_services import resolve_config
-from src.services.learning_service import update_factor
+from src.services.learning_service import get_factor, update_factor
 
 
 def compute_shrinkage_rates(session: Session, physical_count_id, tenant_id):
@@ -66,6 +78,10 @@ def compute_shrinkage_rates(session: Session, physical_count_id, tenant_id):
         .where(InventoryTransaction.created_at >= window_start)
         .where(InventoryTransaction.created_at <= current_count.counted_at)
         .where(InventoryTransaction.transaction_type.in_(SUBTRACT_TYPES))
+        .where(
+            InventoryTransaction.transaction_type
+            != InventoryTransactionType.SHRINKAGE.value
+        )
         .group_by(Category.id, Category.name)
     )
 
@@ -83,6 +99,35 @@ def compute_shrinkage_rates(session: Session, physical_count_id, tenant_id):
 
         observation = float(abs(row.total_discrepancy) / depleted)
 
+        current_factor = get_factor(
+            session,
+            str(current_count.tenant_id),
+            FactorKind.SHRINKAGE,
+            str(row.category_id),
+            default=0.0,
+        )
+
+        if current_factor > 0 and observation > 3 * float(current_factor):
+            persist_anomaly(
+                session,
+                str(current_count.tenant_id),
+                AnomalyType.COUNT_DISCREPANCY,
+                f"category:{row.category}",
+                1,
+                current_count.counted_at.date(),
+                {
+                    "category": row.category,
+                    "observation": observation,
+                    "current_factor": float(current_factor),
+                    "ratio": round(observation / float(current_factor), 1),
+                    "total_discrepancy": float(abs(row.total_discrepancy)),
+                    "total_depletion": float(depleted),
+                },
+                f"Count discrepancy in {row.category} is {observation / float(current_factor):.1f}× the learned shrinkage rate "
+                f"({observation:.1%} vs {float(current_factor):.1%}). Possible spoilage event, theft, or miscount.",
+                config.anomalies.cooldown_hours,
+            )
+
         update_factor(
             session,
             str(current_count.tenant_id),
@@ -94,4 +139,72 @@ def compute_shrinkage_rates(session: Session, physical_count_id, tenant_id):
             config.learning.shrinkage_clamp_high,
             current_count.counted_at.date(),
             default_value=0.0,
+        )
+
+
+def apply_daily_shrinkage(session: Session, tenant_id: str, business_date: str):
+    business_date = date.fromisoformat(business_date)
+
+    tz = session.scalar(select(Tenant.timezone).where(Tenant.id == tenant_id))
+    day_start = datetime.combine(business_date, time.min, tzinfo=ZoneInfo(tz))
+    day_end = datetime.combine(
+        business_date + timedelta(days=1), time.min, tzinfo=ZoneInfo(tz)
+    )
+
+    sub_by_item = session.execute(
+        select(
+            InventoryTransaction.item_id,
+            func.sum(func.abs(InventoryTransaction.quantity_change)).label(
+                "total_usage"
+            ),
+        )
+        .where(InventoryTransaction.tenant_id == tenant_id)
+        .where(InventoryTransaction.transaction_type.in_(SUBTRACT_TYPES))
+        .where(
+            InventoryTransaction.transaction_type
+            != InventoryTransactionType.SHRINKAGE.value
+        )
+        .where(InventoryTransaction.occurred_at >= day_start)
+        .where(InventoryTransaction.occurred_at < day_end)
+        .group_by(InventoryTransaction.item_id)
+    ).all()
+
+    if not sub_by_item:
+        return
+
+    item_ids = [row.item_id for row in sub_by_item]
+    items = session.scalars(
+        select(InventoryItem)
+        .where(InventoryItem.id.in_(item_ids))
+        .where(InventoryItem.tenant_id == tenant_id)
+    ).all()
+
+    category_map = {item.id: str(item.category_id) for item in items}
+
+    for row in sub_by_item:
+        category_id = category_map.get(row.item_id)
+        if not category_id:
+            continue
+
+        factor = get_factor(
+            session, tenant_id, FactorKind.SHRINKAGE, category_id, default=0.0
+        )
+
+        if factor <= 0:
+            continue
+
+        shrinkage_qty = float(row.total_usage) * float(factor)
+
+        publish_event(
+            EventCategory.INVENTORY,
+            InventoryEventType.SHRINKAGE_DEPLETION.value,
+            "3",
+            InventoryEventPayload(
+                item_id=row.item_id,
+                quantity=shrinkage_qty,
+                transaction_type=InventoryTransactionType.SHRINKAGE,
+                note=f"Daily shrinkage: {business_date}",
+                source_key=f"shrinkage:{business_date}:{row.item_id}",
+            ).model_dump(mode="json"),
+            str(tenant_id),
         )

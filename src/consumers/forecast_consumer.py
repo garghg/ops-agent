@@ -23,6 +23,7 @@ from src.services.forecast_service import (
     update_forecast_bias,
 )
 from src.services.health_service import record_heartbeat
+from src.services.shrinkage_service import apply_daily_shrinkage
 
 SYSTEM_STREAM = f"{EventCategory.SYSTEM.value}_events"
 log = get_logger(__name__)
@@ -58,6 +59,7 @@ def process_events(events: list[dict]):
                 compute_share_vectors(session, tenant_id, business_date)
                 compute_item_demand(session, tenant_id, business_date)
                 compute_intraday_profiles(session, tenant_id, business_date)
+                apply_daily_shrinkage(session, tenant_id, business_date)
 
             publish_event(
                 EventCategory.SYSTEM,
