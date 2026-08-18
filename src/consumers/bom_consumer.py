@@ -30,7 +30,7 @@ def process_events(events: list[dict]) -> None:
 
         try:
             with SessionLocal() as session:
-                for line_item in sale.line_items:
+                for line_idx, line_item in enumerate(sale.line_items):
                     catalog_item = session.scalar(
                         select(CatalogItem).where(
                             CatalogItem.name == line_item.item_name,
@@ -55,7 +55,7 @@ def process_events(events: list[dict]) -> None:
                         session.commit()
                         continue
 
-                    for mod_name in line_item.modifiers:
+                    for mod_idx, mod_name in enumerate(line_item.modifiers):
                         modifier = session.scalar(
                             select(CatalogModifier).where(
                                 CatalogModifier.name == mod_name,
@@ -116,6 +116,7 @@ def process_events(events: list[dict]) -> None:
                                 quantity=bom_line.quantity * line_item.quantity,
                                 transaction_type=InventoryTransactionType.USAGE,
                                 note=f"BOM: {line_item.item_name} + {mod_name}",
+                                source_key=f"{sale.external_transaction_id}:{line_idx}:{mod_idx}:{bom_line.inventory_item_id}",
                             ).model_dump(mode="json"),
                             str(tenant_id),
                         )
@@ -138,6 +139,7 @@ def process_events(events: list[dict]) -> None:
                                 quantity=bom_line.quantity * line_item.quantity,
                                 transaction_type=InventoryTransactionType.USAGE,
                                 note=f"BOM: {line_item.item_name} (always)",
+                                source_key=f"{sale.external_transaction_id}:{line_idx}:always:{bom_line.inventory_item_id}",
                             ).model_dump(mode="json"),
                             str(tenant_id),
                         )
@@ -174,7 +176,7 @@ def bom_consumer() -> None:
                 CONSUMER_NAME,
             )
             process_events(claimed_events)
-            
+
         with SessionLocal() as session:
             record_heartbeat(session, "bom_consumer")
 

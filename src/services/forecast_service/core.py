@@ -13,7 +13,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from src.db.models import (
+    CorrectionFactor,
     DailyActual,
+    FactorHistory,
     Forecast,
     ModelRegistry,
     SaleLineItem,
@@ -425,6 +427,19 @@ def backtest(
 
 def update_forecast_bias(session: Session, tenant_id: str, business_date: str):
     business_date = date.fromisoformat(business_date)
+
+    existing = session.scalar(
+        select(FactorHistory)
+        .join(CorrectionFactor, FactorHistory.correction_factor_id == CorrectionFactor.id)
+        .where(FactorHistory.tenant_id == tenant_id)
+        .where(FactorHistory.business_date == business_date)
+        .where(CorrectionFactor.kind == FactorKind.FORECAST_BIAS)
+        .limit(1)
+    )
+
+    if existing:
+        return
+
     actuals = session.scalars(
         select(DailyActual)
         .where(DailyActual.actual_date == business_date)

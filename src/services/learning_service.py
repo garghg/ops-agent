@@ -14,7 +14,6 @@ from src.schemas.anomaly import AnomalyType
 from src.schemas.models import ModelVersion
 from src.services.anomaly_service import persist_anomaly
 from src.services.config_services import resolve_config
-from src.services.forecast_service.config import PROMOTION_LOOKBACK_DAYS
 
 
 def update_factor(
@@ -109,6 +108,7 @@ def update_factor(
             new_value=raw,
             observation=observation,
             clamped=clamped,
+            business_date=business_date,
         )
     )
 
@@ -132,7 +132,12 @@ def get_factor(
 
 
 def reset_factor(
-    session: Session, tenant_id: str, kind: str, scope_key: str, default: float = 1.0
+    session: Session,
+    tenant_id: str,
+    kind: str,
+    scope_key: str,
+    business_date: date,
+    default: float = 1.0,
 ):
     row = session.scalar(
         select(CorrectionFactor)
@@ -157,6 +162,7 @@ def reset_factor(
             new_value=default,
             observation=default,
             clamped=False,
+            business_date=business_date,
         )
     )
 
@@ -164,9 +170,10 @@ def reset_factor(
 
 
 def champion_eval(session: Session, tenant_id: str, challenger: str, as_of_date: date):
+    from src.services.forecast_service.config import PROMOTION_LOOKBACK_DAYS
     from src.services.forecast_service.core import backtest
     from src.services.forecast_service.metrics import check_promotion_gate
-    
+
     cur_champion = session.scalar(
         select(ModelRegistry.active_version).where(ModelRegistry.tenant_id == tenant_id)
     )
@@ -176,7 +183,7 @@ def champion_eval(session: Session, tenant_id: str, challenger: str, as_of_date:
 
     if cur_champion == challenger:
         return
-    
+
     nested = session.begin_nested()
 
     start = as_of_date - timedelta(days=PROMOTION_LOOKBACK_DAYS)

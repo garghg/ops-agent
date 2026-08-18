@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from zoneinfo import ZoneInfo
 
 import httpx
 from sqlalchemy import func, select
@@ -91,8 +92,9 @@ def update_db(session: Session, weather_list: list[dict], tenant_id: str, source
     session.commit()
 
 
-def collect_weather():
-    yesterday = (date.today() - timedelta(days=1)).isoformat()
+def collect_weather(business_date: str):
+    business_date = date.fromisoformat(business_date)
+    yesterday = (business_date - timedelta(days=1)).isoformat()
     with SessionLocal() as session:
         tenants = session.scalars(
             select(Tenant).where(

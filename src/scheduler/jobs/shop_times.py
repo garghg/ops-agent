@@ -31,7 +31,7 @@ def poll_shop_times() -> None:
                     EventCategory.SYSTEM,
                     SystemEventType.DAY_OPENED.value,
                     "4",
-                    {},
+                    {"business_date": local_time.date().isoformat()},
                     tenant_id=str(tenant.id),
                 )
 

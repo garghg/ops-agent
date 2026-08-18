@@ -23,3 +23,4 @@ class InventoryEventPayload(BaseModel):
     quantity: Decimal
     transaction_type: InventoryTransactionType
     note: str | None = None
+    source_key: str | None = None

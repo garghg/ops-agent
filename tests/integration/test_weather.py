@@ -1,6 +1,8 @@
+from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+import pytest
 from sqlalchemy import select
 
 from src.db.models import Tenant, WeatherObservation
@@ -34,15 +36,18 @@ def mock_httpx_get(url, params=None):
         response.json.return_value = FAKE_FORECAST_RESPONSE
     return response
 
+@pytest.fixture
+def business_date():
+    return date(2026, 8, 5)
 
 @patch("src.services.weather_service.httpx.get", side_effect=mock_httpx_get)
-def test_collect_weather(_, seeded_db):
+def test_collect_weather(_, seeded_db, business_date):
     tenant = seeded_db.scalars(select(Tenant)).first()
     tenant.latitude = Decimal("49.282700")
     tenant.longitude = Decimal("-123.120700")
     seeded_db.commit()
 
-    collect_weather()
+    collect_weather(str(business_date))
 
     seeded_db.expire_all()
 

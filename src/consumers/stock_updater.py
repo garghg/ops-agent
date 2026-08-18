@@ -49,7 +49,7 @@ def process_events(events: list[dict]) -> None:
                         quantity_change=payload.quantity,
                         transaction_type=payload.transaction_type,
                         note=payload.note,
-                        event_id=event["id"],
+                        event_id=payload.source_key if payload.source_key else event["id"],
                         tenant_id=tenant_id
                     )
                 )

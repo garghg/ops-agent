@@ -1,4 +1,3 @@
-import json
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -6,6 +5,7 @@ from zoneinfo import ZoneInfo
 import redis
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from src.config import CLAIM_INTERVAL_SECONDS
 from src.consumers.utils import CONSUMER_NAME
@@ -156,6 +156,13 @@ def process_events(events: list[dict]) -> None:
                     )
 
                 session.commit()
+
+        except IntegrityError as e:
+            if ("spend_ledger_tenant_purchase_order_key" in str(e.orig)
+                or "email_outbox_tenant_id_idempotency_key_key" in str(e.orig)):
+                print(f"Event {event['id']} already processed, skipping.")
+            else:
+                raise
 
         except Exception as e:  # noqa: BLE001
             print(f"Error processing event {event['id']}: {e}")

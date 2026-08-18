@@ -293,7 +293,7 @@ class TestResetFactor:
             clamp_high=1.30,
             business_date=business_date,
         )
-        reset_factor(seeded_db, str(tenant.id), FactorKind.FORECAST_BIAS, "total_units")
+        reset_factor(seeded_db, str(tenant.id), FactorKind.FORECAST_BIAS, "total_units", business_date)
 
         factor = seeded_db.scalar(
             select(CorrectionFactor)
@@ -316,7 +316,7 @@ class TestResetFactor:
             clamp_high=1.30,
             business_date=business_date,
         )
-        reset_factor(seeded_db, str(tenant.id), FactorKind.FORECAST_BIAS, "total_units")
+        reset_factor(seeded_db, str(tenant.id), FactorKind.FORECAST_BIAS, "total_units", business_date)
 
         histories = seeded_db.scalars(
             select(FactorHistory)
@@ -326,8 +326,8 @@ class TestResetFactor:
         assert len(histories) == 2
         assert float(histories[1].new_value) == 1.0
 
-    def test_reset_nonexistent_does_nothing(self, seeded_db, tenant):
-        reset_factor(seeded_db, str(tenant.id), FactorKind.FORECAST_BIAS, "nonexistent")
+    def test_reset_nonexistent_does_nothing(self, seeded_db, tenant, business_date):
+        reset_factor(seeded_db, str(tenant.id), FactorKind.FORECAST_BIAS, "nonexistent", business_date)
         histories = seeded_db.scalars(
             select(FactorHistory).where(FactorHistory.tenant_id == tenant.id)
         ).all()

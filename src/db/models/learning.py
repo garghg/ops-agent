@@ -1,9 +1,10 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
+    Date,
     ForeignKey,
     Integer,
     Numeric,
@@ -84,3 +85,4 @@ class FactorHistory(Base):
     clamped: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
     )
+    business_date: Mapped[date] = mapped_column(Date, nullable=False)

@@ -15,8 +15,13 @@ SYSTEM_STREAM = f"{EventCategory.SYSTEM.value}_events"
 
 def listen_event(events: list[dict]) -> None:
     for event in events:
-        if event["event_type"] == SystemEventType.DAY_OPENED.value:
-            collect_weather()
+        try:
+            if event["event_type"] == SystemEventType.DAY_OPENED.value:
+                business_date = event["payload"]["business_date"]
+                collect_weather(business_date)
+        except Exception as e:  # noqa: BLE001
+            print(f"Bad payload, dropping event {event['id']}: {e}")
+            
         r.xack(SYSTEM_STREAM, ConsumerGroup.WEATHER_CONSUMER.value, event["id"])
 
 

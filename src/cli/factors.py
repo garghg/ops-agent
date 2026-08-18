@@ -1,10 +1,13 @@
+from zoneinfo import ZoneInfo
+
 import typer
 from rich.console import Console
 from rich.table import Table
 from sqlalchemy import select
 
+from clock import get_now
 from src.cli.context import get_tenant
-from src.db.models import CorrectionFactor
+from src.db.models import CorrectionFactor, Tenant
 from src.services.learning_service import reset_factor
 
 app = typer.Typer()
@@ -64,5 +67,9 @@ def reset(kind: str, scope_key: str):
         console.print(f"[red]No factor found for {kind}:{scope_key}.[/red]")
         return
 
-    reset_factor(session, str(tenant.id), kind, scope_key)
+    tz = ZoneInfo(session.scalar(select(Tenant.timezone).where(Tenant.id == tenant.id)))
+    now = get_now().astimezone(tz=tz)
+    today = now.date()
+
+    reset_factor(session, str(tenant.id), kind, scope_key, today)
     console.print(f"[green]✓ Factor {kind}:{scope_key} reset to default.[/green]")
