@@ -10,7 +10,9 @@ from sqlalchemy.orm import Session
 from src.db.models import (
     AvailabilityException,
     AvailabilityRule,
+    CorrectionFactor,
     Employee,
+    FactorHistory,
     Forecast,
     IntradayProfile,
     ModelRegistry,
@@ -387,6 +389,19 @@ def diagnose_shortfalls(
 
 def calibrate_staffing(session: Session, tenant_id: str, week_start: date):
     MIN_PROPOSED_FOR_CALIBRATION = 2
+
+    existing = session.scalar(
+        select(FactorHistory)
+        .join(CorrectionFactor, FactorHistory.correction_factor_id == CorrectionFactor.id)
+        .where(FactorHistory.tenant_id == tenant_id)
+        .where(CorrectionFactor.kind == FactorKind.STAFFING_RATIO)
+        .where(FactorHistory.business_date >= week_start)
+        .where(FactorHistory.business_date < week_start + timedelta(days=7))
+        .limit(1)
+    )
+
+    if existing:
+        return
 
     edits = session.scalars(
         select(ScheduleEdit)
