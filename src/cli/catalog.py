@@ -582,7 +582,9 @@ def edit_map():
     bom, cat_item, mod, inv = bom_lines[idx - 1]
     mod_label = mod.name if mod else "(always)"
 
-    console.print(f"\n  Current: {cat_item.name} + {mod_label} → {bom.quantity} {bom.unit} of {inv.name}")
+    console.print(
+        f"\n  Current: {cat_item.name} + {mod_label} → {bom.quantity} {bom.unit} of {inv.name}"
+    )
 
     while True:
         try:
@@ -595,7 +597,9 @@ def edit_map():
 
     bom.quantity = new_qty
     session.commit()
-    console.print(f"[green]✓ Updated: {cat_item.name} + {mod_label} → {new_qty} {bom.unit} of {inv.name}[/green]")
+    console.print(
+        f"[green]✓ Updated: {cat_item.name} + {mod_label} → {new_qty} {bom.unit} of {inv.name}[/green]"
+    )
 
 
 @app.command("remove-map")
