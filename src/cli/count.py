@@ -29,7 +29,7 @@ def enter():
             console.print(f"[red]No inventory found for {tenant.name}[/red]")
             return
 
-        console.print(f"\n[bold]Cycle Count — {tenant.name}[/bold]")
+        console.print(f"\n[bold]Cycle Count -- {tenant.name}[/bold]")
         console.print(f"Counted by: {counted_by}")
         console.print(f"Items to count: {len(inventory)}\n")
 

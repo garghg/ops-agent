@@ -202,7 +202,7 @@ def add_modifier():
                 )
                 return
 
-    # No pattern found — single manual mapping
+    # No pattern found -- single manual mapping
     while True:
         try:
             qty = Decimal(Prompt.ask(f"  Quantity per sale ({target_inv.unit})"))

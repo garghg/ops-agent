@@ -200,7 +200,7 @@ def adjust():
 
     for i, item in enumerate(matches, 1):
         console.print(
-            f"  [{i}] {item.name} — {item.quantity_on_hand} {item.unit}"
+            f"  [{i}] {item.name} -- {item.quantity_on_hand} {item.unit}"
         )
 
     while True:

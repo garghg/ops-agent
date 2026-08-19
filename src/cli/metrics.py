@@ -99,7 +99,7 @@ def forecast():
             skill = None
         aggregate_metrics[k]["skill"] = skill
 
-    table = Table(title=f"Forecast Metrics — {start_date} to {end_date}")
+    table = Table(title=f"Forecast Metrics -- {start_date} to {end_date}")
     table.add_column("Model")
     table.add_column("Avg MAE", justify="right")
     table.add_column("WAPE", justify="right")
@@ -159,7 +159,7 @@ def autonomy():
         console.print("[yellow]No on-demand suppliers found.[/yellow]")
         return
 
-    table = Table(title=f"Autonomy Metrics — {tenant.name}")
+    table = Table(title=f"Autonomy Metrics -- {tenant.name}")
     table.add_column("Supplier")
     table.add_column("Proposals", justify="right")
     table.add_column("Span (days)", justify="right")
@@ -181,11 +181,11 @@ def autonomy():
             str(stats["span_days"]),
             f"{stats['approval_rate'] * 100:.0f}%"
             if stats["approval_rate"] is not None
-            else "—",
+            else "--",
             f"{stats['edit_median'] * 100:.1f}%"
             if stats["edit_median"] is not None
-            else "—",
-            f"{stats['max_edit'] * 100:.1f}%" if stats["max_edit"] is not None else "—",
+            else "--",
+            f"{stats['max_edit'] * 100:.1f}%" if stats["max_edit"] is not None else "--",
             str(stats["consecutive_rejects"]),
             str(stats["critical_failures"]),
         )

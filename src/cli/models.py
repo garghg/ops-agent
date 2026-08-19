@@ -56,9 +56,9 @@ def list():
         table.add_row(
             r.champion_version,
             r.challenger_version,
-            f"{float(r.skill):.4f}" if r.skill is not None else "—",
-            f"{float(r.wape):.4f}" if r.wape is not None else "—",
-            f"{float(r.coverage_pct):.1f}" if r.coverage_pct is not None else "—",
+            f"{float(r.skill):.4f}" if r.skill is not None else "--",
+            f"{float(r.wape):.4f}" if r.wape is not None else "--",
+            f"{float(r.coverage_pct):.1f}" if r.coverage_pct is not None else "--",
             "[green]✓[/green]" if r.passed else "[red]✗[/red]",
             r.ran_at.strftime("%Y-%m-%d %H:%M"),
         )

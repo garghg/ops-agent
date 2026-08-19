@@ -207,7 +207,7 @@ def create(supplier_id: str):
         )
 
     if not lines:
-        console.print("[yellow]No items selected — order cancelled.[/yellow]")
+        console.print("[yellow]No items selected -- order cancelled.[/yellow]")
         return
 
     delivery_date = Prompt.ask("Expected delivery date (YYYY-MM-DD)")
@@ -319,7 +319,7 @@ def receive_standing(supplier_id: str):
         )
 
     if not lines:
-        console.print("[yellow]No items received — nothing recorded.[/yellow]")
+        console.print("[yellow]No items received -- nothing recorded.[/yellow]")
         return
 
     total_value = sum(l["quantity"] * l["unit_cost"] for l in lines)
@@ -806,7 +806,7 @@ def edit(po_id: str):
         )
         session.commit()
         evaluate_demotion(session, str(tenant.id), str(po.supplier_id))
-        console.print("[yellow]All lines removed — order cancelled.[/yellow]")
+        console.print("[yellow]All lines removed -- order cancelled.[/yellow]")
         return
 
     po.total_value = sum(l.quantity_ordered * l.unit_cost for l in remaining_lines)

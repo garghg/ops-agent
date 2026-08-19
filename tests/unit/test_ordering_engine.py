@@ -59,7 +59,7 @@ def _seed_forecasts(session, tenant_id, item_id, start_date, days, point_estimat
 
 
 class TestParFallback:
-    """No forecast data exists — engine falls back to target_quantity - position."""
+    """No forecast data exists -- engine falls back to target_quantity - position."""
 
     def test_uses_par_when_no_forecasts(self, seeded_db, tenant, chocolate):
         result = generate_proposals(seeded_db, tenant.id, [str(chocolate.id)])
@@ -73,7 +73,7 @@ class TestParFallback:
 
 
 class TestForecastDrivenOrder:
-    """Forecast data exists — engine uses p95 quantile instead of par."""
+    """Forecast data exists -- engine uses p95 quantile instead of par."""
 
     @patch("src.services.ordering_service.horizon.get_now")
     def test_forecast_drives_higher_quantity_than_par(self, mock_now, seeded_db, tenant, chocolate, dairy_supplier):
@@ -148,7 +148,7 @@ class TestHeatWaveRaisesQuantity:
             seeded_db.delete(fc)
         seeded_db.flush()
 
-        # Heat wave demand — much higher
+        # Heat wave demand -- much higher
         _seed_forecasts(
             seeded_db, tenant.id, chocolate.id,
             start_date=today,
@@ -207,7 +207,7 @@ class TestWidenedIntervalsRaiseSafetyStock:
             seeded_db.delete(fc)
         seeded_db.flush()
 
-        # Wide intervals — same point estimate, much wider spread
+        # Wide intervals -- same point estimate, much wider spread
         _seed_forecasts(
             seeded_db, tenant.id, chocolate.id,
             start_date=today,
@@ -249,7 +249,7 @@ class TestOnOrderNetting:
             },
         )
 
-        # First run — no on-order
+        # First run -- no on-order
         result_no_oo = generate_proposals(seeded_db, tenant.id, [str(chocolate.id)])
         assert len(result_no_oo) == 1
         line_no_oo = seeded_db.scalar(
@@ -290,11 +290,11 @@ class TestOnOrderNetting:
         )
         seeded_db.flush()
 
-        # Second run — 10 units on order
+        # Second run -- 10 units on order
         result_with_oo = generate_proposals(seeded_db, tenant.id, [str(chocolate.id)])
 
         if len(result_with_oo) == 0:
-            # On-order covered the shortfall entirely — correct behavior
+            # On-order covered the shortfall entirely -- correct behavior
             assert True
         else:
             line_with_oo = seeded_db.scalar(

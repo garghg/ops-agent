@@ -207,7 +207,7 @@ def evaluate_demotion(session: Session, tenant_id: str, supplier_id: str):
             event_type=AutonomyEventType.DEMOTED.value,
             from_state=AutonomyState.AUTO_WITHIN_BOUNDS.value,
             to_state=AutonomyState.PROPOSE_ONLY.value,
-            reason=f"Auto-demoted — {', '.join(reasons)}",
+            reason=f"Auto-demoted -- {', '.join(reasons)}",
         )
     )
     session.commit()

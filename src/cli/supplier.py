@@ -34,7 +34,7 @@ def list():
         console.print("[yellow]No suppliers.[/yellow]")
         return
 
-    table = Table(title=f"Suppliers — {tenant.name}")
+    table = Table(title=f"Suppliers -- {tenant.name}")
     table.add_column("Name")
     table.add_column("Email")
     table.add_column("Lead Time", justify="right")
@@ -55,7 +55,7 @@ def list():
             s.email,
             f"{s.lead_time_days}d",
             f"{s.order_cutoff_hours}h",
-            f"${s.minimum_order_value}" if s.minimum_order_value else "—",
+            f"${s.minimum_order_value}" if s.minimum_order_value else "--",
             str(item_count),
             "[green]✓[/green]" if s.is_active else "[red]✗[/red]",
         )
@@ -242,7 +242,7 @@ def link_item():
         console.print(f"\n  Already linked to {supplier.name}:")
         for si, inv in linked:
             console.print(
-                f"    {inv.name} — ${si.cost_per_unit}/{inv.unit} (pack: {si.pack_size})"
+                f"    {inv.name} -- ${si.cost_per_unit}/{inv.unit} (pack: {si.pack_size})"
             )
 
     # Show unlinked items
@@ -352,10 +352,10 @@ def update_cost():
         console.print(f"[yellow]No items found for {supplier.name}.[/yellow]")
         return
 
-    console.print(f"\n[bold]{supplier.name} — Items[/bold]\n")
+    console.print(f"\n[bold]{supplier.name} -- Items[/bold]\n")
     for i, (si, inv) in enumerate(si_rows, 1):
         console.print(
-            f"  [{i}] {inv.name} — ${si.cost_per_unit}/{inv.unit} "
+            f"  [{i}] {inv.name} -- ${si.cost_per_unit}/{inv.unit} "
             f"(pack: {si.pack_size})"
         )
 
@@ -421,6 +421,6 @@ def update_cost():
     ratio = ratios.get(inv.id)
     if ratio and ratio < Decimal(str(margin_floor)):
         console.print(
-            f"[red]Warning: {inv.name} margin below floor — ratio {ratio:.2f} (floor: {margin_floor})[/red]"
+            f"[red]Warning: {inv.name} margin below floor -- ratio {ratio:.2f} (floor: {margin_floor})[/red]"
         )
     console.print(f"[green]Cost updated for {inv.name}.[/green]")

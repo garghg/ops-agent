@@ -5,6 +5,7 @@ from src.cli.app_config import app as config_app
 from src.cli.autonomy import app as autonomy_app
 from src.cli.catalog import app as catalog_app
 from src.cli.count import app as count_app
+from src.cli.employee import app as employee_app
 from src.cli.factors import app as factors_app
 from src.cli.inventory import app as inventory_app
 from src.cli.login import login, logout
@@ -33,3 +34,4 @@ app.add_typer(tenant_app, name="tenant")
 app.add_typer(config_app, name="config")
 app.add_typer(inventory_app, name="inventory")
 app.add_typer(catalog_app, name="catalog")
+app.add_typer(employee_app, name="employee")

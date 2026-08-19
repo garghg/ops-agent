@@ -89,7 +89,7 @@ def test_newsvendor_ratios_basic(seeded_db):
 
     # High margin items should have high ratios
     # Ice cream costs ~$4.25/kg, used 0.10kg per scoop ($0.425),
-    # scoop sells for $4.50 — high margin → ratio should be well above 0.5
+    # scoop sells for $4.50 -- high margin → ratio should be well above 0.5
     assert ratios[vanilla.id] > Decimal("0.5"), (
         f"Vanilla ratio {ratios[vanilla.id]} should be > 0.5 given high margins"
     )
