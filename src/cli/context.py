@@ -22,7 +22,7 @@ def get_tenant():
     import typer
 
     if not CONTEXT_FILE.exists():
-        typer.echo("Not logged in. Run: ops login")
+        typer.echo("Not logged in. Run: login")
         raise typer.Exit(1)
 
     data = json.loads(CONTEXT_FILE.read_text())
@@ -31,7 +31,7 @@ def get_tenant():
         select(Tenant).where(Tenant.id == data["tenant_id"])
     )
     if not tenant:
-        typer.echo("Tenant not found. Run: ops login")
+        typer.echo("Tenant not found. Run: login")
         clear_context()
         raise typer.Exit(1)
 

@@ -87,7 +87,7 @@ def set_value(key: str, value: str):
 
     if key not in flat:
         console.print(f"[red]Unknown key: {key}[/red]")
-        console.print("[yellow]Run 'ops config show' to see available keys.[/yellow]")
+        console.print("[yellow]Run 'config show' to see available keys.[/yellow]")
         return
 
     cast = _cast_value(value)

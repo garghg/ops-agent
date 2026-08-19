@@ -8,11 +8,11 @@ from rich.prompt import Prompt
 from rich.table import Table
 from sqlalchemy import func, select
 
-from services.ordering_service import rollup
 from src.cli.context import get_tenant
 from src.db.models import DailyActual, ForecastMetric, Supplier
 from src.schemas.models import ModelVersion
 from src.services.forecast_service import backtest as bt
+from src.services.ordering_service import rollup
 
 app = typer.Typer()
 
