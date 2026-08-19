@@ -1,6 +1,7 @@
 import typer
 
 from src.cli.anomaly import app as anomaly_app
+from src.cli.app_config import app as config_app
 from src.cli.autonomy import app as autonomy_app
 from src.cli.count import app as count_app
 from src.cli.factors import app as factors_app
@@ -11,6 +12,7 @@ from src.cli.proposals import app as proposals_app
 from src.cli.schedule import app as schedule_app
 from src.cli.shrinkage import app as shrinkage_app
 from src.cli.supplier import app as supplier_app
+from src.cli.tenant import app as tenant_app
 
 app = typer.Typer()
 app.add_typer(count_app, name="count")
@@ -25,3 +27,5 @@ app.add_typer(factors_app, name="factors")
 app.add_typer(models_app, name="models")
 app.add_typer(schedule_app, name="schedule")
 app.add_typer(supplier_app, name="supplier")
+app.add_typer(tenant_app, name="tenant")
+app.add_typer(config_app, name="config")
