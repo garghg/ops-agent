@@ -115,7 +115,11 @@ def explain(po_id: str):
         console.print("[red]Purchase order not found.[/red]")
         return
 
-    supplier = session.scalar(select(Supplier).where(Supplier.id == po.supplier_id))
+    supplier = session.scalar(
+        select(Supplier)
+        .where(Supplier.id == po.supplier_id)
+        .where(Supplier.tenant_id == tenant.id)
+    )
 
     console.print(f"\n[bold]PO for {supplier.name}[/bold]")
     console.print(f"  Status: {po.status}")
@@ -136,7 +140,9 @@ def explain(po_id: str):
 
     for d in decisions:
         item = session.scalar(
-            select(InventoryItem).where(InventoryItem.id == d.inventory_item_id)
+            select(InventoryItem)
+            .where(InventoryItem.id == d.inventory_item_id)
+            .where(InventoryItem.tenant_id == tenant.id)
         )
         s = d.snapshot
 

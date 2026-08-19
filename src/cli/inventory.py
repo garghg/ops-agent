@@ -51,7 +51,9 @@ def list():
 
     cat_ids = {item.category_id for item in items}
     categories = session.scalars(
-        select(Category).where(Category.id.in_(cat_ids))
+        select(Category)
+        .where(Category.id.in_(cat_ids))
+        .where(Category.tenant_id == tenant.id)
     ).all()
     cat_map = {c.id: c.name for c in categories}
 

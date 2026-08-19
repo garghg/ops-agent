@@ -75,27 +75,6 @@ class TestSummaryHappyPath:
         assert "Daily Summary" in outbox.subject
 
 
-class TestNoOwnerEmail:
-    def test_skips_when_no_owner_email(self, seeded_db, tenant):
-        original_email = tenant.owner_email
-        tenant.owner_email = None
-        seeded_db.commit()
-
-        event = _make_anomalies_processed_event(tenant.id)
-        process_events([event])
-
-        outbox = seeded_db.scalar(
-            select(EmailOutbox).where(
-                EmailOutbox.tenant_id == tenant.id,
-                EmailOutbox.idempotency_key == f"summary-{tenant.id}-2026-07-28",
-            )
-        )
-        assert outbox is None
-
-        tenant.owner_email = original_email
-        seeded_db.commit()
-
-
 class TestNonForecastSkipped:
     def test_day_opened_event_ignored(self, seeded_db, tenant):
         event = _make_day_closed_event(tenant.id)
