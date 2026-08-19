@@ -10,6 +10,7 @@ from src.cli.factors import app as factors_app
 from src.cli.inventory import app as inventory_app
 from src.cli.login import login, logout
 from src.cli.metrics import app as metrics_app
+from src.cli.miscellaneous import explain, health, outbox
 from src.cli.models import app as models_app
 from src.cli.proposals import app as proposals_app
 from src.cli.schedule import app as schedule_app
@@ -18,10 +19,13 @@ from src.cli.supplier import app as supplier_app
 from src.cli.tenant import app as tenant_app
 
 app = typer.Typer()
-app.add_typer(count_app, name="count")
-app.add_typer(shrinkage_app, name="shrinkage")
 app.command()(login)
 app.command()(logout)
+app.command()(health)
+app.command()(outbox)
+app.command()(explain)
+app.add_typer(count_app, name="count")
+app.add_typer(shrinkage_app, name="shrinkage")
 app.add_typer(proposals_app, name="proposals")
 app.add_typer(metrics_app, name="metrics")
 app.add_typer(autonomy_app, name="autonomy")
