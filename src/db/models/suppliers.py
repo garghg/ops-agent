@@ -40,7 +40,7 @@ class Supplier(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     email: Mapped[str] = mapped_column(Text, nullable=False)
     lead_time_days: Mapped[int] = mapped_column(Integer, nullable=False)
-    delivery_days: Mapped[list] = mapped_column(JSONB, nullable=True)
+    delivery_days: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     order_cutoff_hours: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="24"
     )

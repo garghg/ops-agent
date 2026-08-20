@@ -5,10 +5,8 @@ from decimal import Decimal
 import numpy as np
 import pandas as pd
 
-CSV_PATH = "simulation/simulation_data/transactions.csv"
 
-
-def spread_timestamps(
+def _spread_timestamps(
     day_date: date, count: int, open_hour: float = 10.0, close_hour: float = 18.0
 ) -> list[datetime]:
     peak_hour = (open_hour + close_hour) / 2
@@ -30,7 +28,7 @@ def spread_timestamps(
     return timestamps
 
 
-def load_transactions(csv_path: str) -> tuple[OrderedDict, dict]:
+def load_transactions(csv_path: str) -> OrderedDict:
     df = pd.read_csv(csv_path)
     df["sales_date_time"] = pd.to_datetime(df["sales_date_time"])
     df["date"] = df["sales_date_time"].dt.date
@@ -40,19 +38,21 @@ def load_transactions(csv_path: str) -> tuple[OrderedDict, dict]:
         grouped[sale_date] = day_df
 
     for sale_date, df in grouped.items():
-        timestamps = spread_timestamps(sale_date, len(df))
+        timestamps = _spread_timestamps(sale_date, len(df))
         df["sales_date_time"] = timestamps
 
-    products_df = pd.read_csv(csv_path.replace("transactions.csv", "products.csv"))
+    return grouped
+
+
+def load_products(csv_path: str) -> dict:
+    products_df = pd.read_csv(csv_path)
     products = {}
+
     for _, row in products_df.iterrows():
         products[str(row["gtin"]).strip()] = {
             "name": row["product_name"].strip(),
             "price": Decimal(str(row["price"])),
+            "category": row["category"].strip(),
         }
 
-    return grouped, products
-
-
-if __name__ == "__main__":
-    grouped, products = load_transactions(CSV_PATH)
+    return products
