@@ -14,12 +14,15 @@ from src.db.models import (
     Supplier,
     SupplierItem,
     Template,
+    Tenant,
 )
 from src.db.session import SessionLocal
 from src.logging import get_logger, setup_logging
 from src.schemas.template import TemplateConfig
 from src.schemas.tenant import ShopType
+from src.schemas.weather import WeatherSource
 from src.services.tenant_service import create_tenant
+from src.services.weather_service import fetch_actuals, update_db
 
 log = get_logger("seed")
 
@@ -205,6 +208,22 @@ def setup():
     return tenant_id
 
 
+def prefetch_weather(tenant_id: str):
+    with SessionLocal() as session:
+        tenant = session.get(Tenant, tenant_id)
+        lat = float(tenant.latitude)
+        lng = float(tenant.longitude)
+
+    weather = fetch_actuals(lat, lng, "2019-01-01", "2019-12-31")
+
+    with SessionLocal() as session:
+        update_db(session, weather, tenant_id, WeatherSource.ACTUAL.value)
+        update_db(session, weather, tenant_id, WeatherSource.FORECAST.value)
+
+    log.info("weather_prefetched", days=len(weather), tenant_id=tenant_id)
+
+
 if __name__ == "__main__":
     setup_logging()
-    setup()
+    tenant_id = setup()
+    prefetch_weather(tenant_id)
