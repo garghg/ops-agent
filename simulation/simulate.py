@@ -1,7 +1,9 @@
 import threading
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
+
+from sqlalchemy import select
 
 from simulation.config import PRODUCT_PATH, TRANSACTION_PATH
 from simulation.loader import load_products, load_transactions
@@ -21,6 +23,8 @@ from src.consumers.forecast_consumer import forecast_consumer
 from src.consumers.sales_consumer import sales_consumer
 from src.consumers.stock_updater import stock_updater
 from src.consumers.summary_consumer import summary_consumer
+from src.db.models import InventoryItem
+from src.db.session import SessionLocal
 from src.events.bus import publish_event, r
 from src.logging import get_logger, setup_logging
 from src.scheduler.jobs import (
@@ -88,18 +92,43 @@ if __name__ == "__main__":
     tenant_id, config = setup()
     prefetch_weather(tenant_id)
 
+    r.flushdb()
+    log.info("redis_flushed")
+
     run_consumers()
     time.sleep(2)
 
     transactions = load_transactions(TRANSACTION_PATH)
+
+    LIMIT_DAYS = 7
+    transactions = dict(list(transactions.items())[:LIMIT_DAYS])
+
     products = load_products(PRODUCT_PATH)
 
-    for day_date, day_df in transactions.items():
-        _set_time(day_date, config.schedule.opening_hour, config.schedule.opening_min)
+    start_date = min(transactions.keys())
+    end_date = max(transactions.keys())
+    current = start_date
+
+    while current <= end_date:
+        day_df = transactions.get(current)
+        _set_time(current, config.schedule.opening_hour, config.schedule.opening_min)
         poll_shop_times()
 
-        for i, row in day_df.iterrows():
+        if not day_df:
+            break
+
+        for i, row in day_df:
             gtin = str(row["gtin"])
+
+            with SessionLocal() as session:
+                item = session.scalar(
+                    select(InventoryItem.quantity_on_hand)
+                    .where(InventoryItem.name == products[gtin]["name"])
+                    .where(InventoryItem.tenant_id == tenant_id)
+                )
+                if item is not None and item <= 0:
+                    continue
+
             sale_payload = {
                 "external_transaction_id": f"{gtin}_{row['sales_date_time']}_{i}",
                 "source": "simulation",
@@ -123,23 +152,24 @@ if __name__ == "__main__":
                 tenant_id,
             )
 
-        _set_time(day_date, 14, 0)
-        poll_shop_times()
-        _set_time(day_date, 18, 0)
+        _wait_for_consumers()
+        _set_time(current, 14, 0)
         poll_shop_times()
         poll_proposals()
+        _set_time(current, config.schedule.closing_hour, config.schedule.closing_min)
+        poll_shop_times()
         sweep_outbox()
         poll_autonomy()
-        if day_date.weekday() == 0:
+        if current.weekday() == 0:
             poll_models()
             calibrate_schedule()
-        _wait_for_consumers()
-        handle_proposals(tenant_id, day_date)
-        handle_deliveries(tenant_id, day_date)
+        handle_proposals(tenant_id, current)
+        handle_deliveries(tenant_id, current)
         handle_anomalies(tenant_id)
-        handle_autonomy(tenant_id, day_date)
-        handle_cycle_counts(tenant_id, day_date)
-        log.info(f"{day_date} - day complete")
+        handle_autonomy(tenant_id, current)
+        handle_cycle_counts(tenant_id, current)
+        log.info(f"{current} - day complete")
+        current += timedelta(days=1)
 
 
     log.info("simulation_complete")

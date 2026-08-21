@@ -87,7 +87,7 @@ def forecast_consumer():
                 ConsumerGroup.FORECAST_CONSUMER.value,
                 CONSUMER_NAME,
             )
-        except redis.exceptions.TimeoutError:
+        except redis.exceptions.TimeoutError: # type: ignore
             events = []
 
         process_events(events)

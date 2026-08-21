@@ -86,7 +86,6 @@ def setup():
 
     supplier_items = []
     for product in products:
-        quantity = random.randint(120, 240)
         catalog.append(
             {
                 "name": product["name"],
@@ -97,9 +96,9 @@ def setup():
         inventory.append(
             {
                 "name": product["name"],
-                "quantity_on_hand": Decimal(quantity),
-                "reorder_point": Decimal(quantity // 3),
-                "target_quantity": Decimal(240),
+                "quantity_on_hand": Decimal(500),
+                "reorder_point": Decimal(350),
+                "target_quantity": Decimal(750),
                 "cost_per_unit": product["price"] * Decimal("0.55"),
                 "shelf_life_days": 30 if product["category"] == "ice_cream" else 180,
                 "unit": "count",
@@ -162,6 +161,7 @@ def setup():
             template_id=str(template.id),
             address="Central Ave., London, UK",
             owner_email="owner@icecreamshop.com",
+            timezone="Europe/London"
         )
         session.flush()
 

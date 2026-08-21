@@ -4,6 +4,7 @@ import redis
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from src.clock import get_now
 from src.config import CLAIM_INTERVAL_SECONDS
 from src.consumers.utils import CONSUMER_NAME
 from src.db.models import InventoryItem, InventoryTransaction
@@ -50,7 +51,8 @@ def process_events(events: list[dict]) -> None:
                         transaction_type=payload.transaction_type,
                         note=payload.note,
                         event_id=payload.source_key if payload.source_key else event["id"],
-                        tenant_id=tenant_id
+                        tenant_id=tenant_id,
+                        occurred_at=get_now()
                     )
                 )
         except ValueError as e:

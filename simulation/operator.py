@@ -34,8 +34,7 @@ from src.services.shrinkage_service import compute_shrinkage_rates
 
 
 def handle_proposals(tenant_id: str, business_date: date):
-
-    with SessionLocal() as session, session.begin():
+    with SessionLocal() as session:
         proposed = session.scalars(
             select(PurchaseOrder)
             .where(PurchaseOrder.tenant_id == tenant_id)
@@ -152,9 +151,10 @@ def handle_proposals(tenant_id: str, business_date: date):
                 )
             )
 
+        session.commit()
 
 def handle_deliveries(tenant_id: str, business_date: date):
-    with SessionLocal() as session, session.begin():
+    with SessionLocal() as session:
         overdue = session.scalars(
             select(PurchaseOrder)
             .where(PurchaseOrder.tenant_id == tenant_id)
@@ -222,9 +222,11 @@ def handle_deliveries(tenant_id: str, business_date: date):
                     tenant_id,
                 )
 
+        session.commit()
+
 
 def handle_anomalies(tenant_id: str):
-    with SessionLocal() as session, session.begin():
+    with SessionLocal() as session:
         anomalies = session.scalars(
             select(Anomaly)
             .where(Anomaly.tenant_id == tenant_id)
@@ -257,10 +259,11 @@ def handle_anomalies(tenant_id: str):
                         action=AnomalyAction.DISMISS,
                     )
                 )
+        session.commit()
 
 
 def handle_autonomy(tenant_id: str, business_date: date):
-    with SessionLocal() as session, session.begin():
+    with SessionLocal() as session:
         proposals = session.scalars(
             select(AutonomyEvent)
             .where(AutonomyEvent.tenant_id == tenant_id)
@@ -310,13 +313,14 @@ def handle_autonomy(tenant_id: str, business_date: date):
                     reason="Owner granted (sim)",
                 )
             )
+        session.commit()
 
 
 def handle_cycle_counts(tenant_id: str, business_date: date):
     if random.random() > 0.15:
         return
 
-    with SessionLocal() as session, session.begin():
+    with SessionLocal() as session:
         items = session.scalars(
             select(InventoryItem).where(InventoryItem.tenant_id == tenant_id)
         ).all()
@@ -352,3 +356,4 @@ def handle_cycle_counts(tenant_id: str, business_date: date):
                 item.quantity_on_hand = actual
 
         compute_shrinkage_rates(session, count.id, tenant_id)
+        session.commit()

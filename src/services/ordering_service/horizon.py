@@ -50,8 +50,10 @@ def horizon_aggregate(
 
         if row:
             sum_pe += row.point_estimate
-            for key in QUANTILE_LABELS:
-                sum_qg[key] += Decimal(str(row.quantile_grid[key]))
+            if row.quantile_grid:
+                for key in QUANTILE_LABELS:
+                    sum_qg[key] += Decimal(str(row.quantile_grid[key]))
+
             present += 1
 
         cur_date += timedelta(days=1)

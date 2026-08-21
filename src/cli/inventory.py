@@ -8,6 +8,7 @@ from rich.table import Table
 from sqlalchemy import func, select
 
 from src.cli.context import get_tenant
+from src.clock import get_now
 from src.db.models import (
     Category,
     InventoryItem,
@@ -245,6 +246,7 @@ def adjust():
             note=reason,
             event_id=f"cli-adjust-{uuid.uuid4()}",
             tenant_id=tenant.id,
+            occurred_at=get_now()
         )
     )
 
