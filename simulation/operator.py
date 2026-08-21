@@ -4,10 +4,14 @@ from decimal import Decimal
 
 from sqlalchemy import exists, func, select
 
-from schemas.anomaly import AnomalyAction
 from src.db.models import (
     Anomaly,
     AnomalyFeedback,
+    AutonomyEvent,
+    CapabilityState,
+    CountLine,
+    InventoryItem,
+    PhysicalCount,
     POEvent,
     POLine,
     PurchaseOrder,
@@ -16,6 +20,8 @@ from src.db.models import (
 )
 from src.db.session import SessionLocal
 from src.events.bus import publish_event
+from src.schemas.anomaly import AnomalyAction
+from src.schemas.autonomy import AutonomyEventType, AutonomyState
 from src.schemas.event import EventCategory, InventoryEventType
 from src.schemas.inventory import InventoryTransactionType
 from src.schemas.learning import FactorKind
@@ -24,6 +30,7 @@ from src.schemas.suppliers import POStatus
 from src.services.config_services import resolve_config
 from src.services.learning_service import update_factor
 from src.services.ordering_service.autonomy_metrics import evaluate_demotion
+from src.services.shrinkage_service import compute_shrinkage_rates
 
 
 def handle_proposals(tenant_id: str, business_date: date):
@@ -251,3 +258,97 @@ def handle_anomalies(tenant_id: str):
                     )
                 )
 
+
+def handle_autonomy(tenant_id: str, business_date: date):
+    with SessionLocal() as session, session.begin():
+        proposals = session.scalars(
+            select(AutonomyEvent)
+            .where(AutonomyEvent.tenant_id == tenant_id)
+            .where(
+                AutonomyEvent.event_type == AutonomyEventType.PROMOTION_PROPOSED.value
+            )
+        ).all()
+
+        if not proposals:
+            return
+
+        for proposal in proposals:
+            age = (business_date - proposal.created_at.date()).days
+            if age < 3:
+                continue
+
+            cap = session.scalar(
+                select(CapabilityState)
+                .where(CapabilityState.tenant_id == tenant_id)
+                .where(CapabilityState.supplier_id == proposal.supplier_id)
+            )
+
+            if cap and cap.state == AutonomyState.AUTO_WITHIN_BOUNDS.value:
+                continue
+
+            if random.random() > 0.90:
+                continue
+
+            if cap:
+                cap.state = AutonomyState.AUTO_WITHIN_BOUNDS.value
+            else:
+                session.add(
+                    CapabilityState(
+                        tenant_id=tenant_id,
+                        supplier_id=proposal.supplier_id,
+                        state=AutonomyState.AUTO_WITHIN_BOUNDS.value,
+                    )
+                )
+
+            session.add(
+                AutonomyEvent(
+                    tenant_id=tenant_id,
+                    supplier_id=proposal.supplier_id,
+                    event_type=AutonomyEventType.GRANTED.value,
+                    from_state=AutonomyState.PROPOSE_ONLY.value,
+                    to_state=AutonomyState.AUTO_WITHIN_BOUNDS.value,
+                    reason="Owner granted (sim)",
+                )
+            )
+
+
+def handle_cycle_counts(tenant_id: str, business_date: date):
+    if random.random() > 0.15:
+        return
+
+    with SessionLocal() as session, session.begin():
+        items = session.scalars(
+            select(InventoryItem).where(InventoryItem.tenant_id == tenant_id)
+        ).all()
+
+        if not items:
+            return
+
+        count = PhysicalCount(
+            tenant_id=tenant_id,
+            counted_at=datetime.combine(business_date, datetime.min.time(), tzinfo=UTC),
+            counted_by="owner (sim)",
+        )
+        session.add(count)
+        session.flush()
+
+        for item in items:
+            expected = item.quantity_on_hand
+            noise = Decimal(str(random.randint(-3, 3)))
+            actual = max(Decimal(0), expected + noise)
+
+            session.add(
+                CountLine(
+                    tenant_id=tenant_id,
+                    physical_count_id=count.id,
+                    inventory_item_id=item.id,
+                    expected_quantity=expected,
+                    actual_quantity=actual,
+                    discrepancy=actual - expected,
+                )
+            )
+
+            if actual != expected:
+                item.quantity_on_hand = actual
+
+        compute_shrinkage_rates(session, count.id, tenant_id)
