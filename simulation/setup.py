@@ -1,5 +1,6 @@
 import random
 import uuid
+from datetime import time
 from decimal import Decimal
 
 from sqlalchemy import text
@@ -7,9 +8,11 @@ from sqlalchemy import text
 from simulation.config import PRODUCT_PATH
 from simulation.loader import load_products
 from src.db.models import (
+    AvailabilityRule,
     BOMLine,
     CatalogItem,
     Category,
+    Employee,
     InventoryItem,
     Supplier,
     SupplierItem,
@@ -21,6 +24,7 @@ from src.logging import get_logger, setup_logging
 from src.schemas.template import TemplateConfig
 from src.schemas.tenant import ShopType
 from src.schemas.weather import WeatherSource
+from src.services.config_services import resolve_config
 from src.services.tenant_service import create_tenant
 from src.services.weather_service import fetch_actuals, update_db
 
@@ -47,6 +51,36 @@ def setup():
             "delivery_days": None,
             "order_cutoff_hours": 17,
             "minimum_order_value": Decimal("20.00"),
+        },
+    ]
+    employees = [
+        {
+            "name": "Alice",
+            "is_keyholder": True,
+            "max_weekly_hours": 40,
+            "min_shift_hours": 4,
+            "max_shift_hours": 8,
+        },
+        {
+            "name": "Bob",
+            "is_keyholder": True,
+            "max_weekly_hours": 32,
+            "min_shift_hours": 4,
+            "max_shift_hours": 8,
+        },
+        {
+            "name": "Charlie",
+            "is_keyholder": False,
+            "max_weekly_hours": 24,
+            "min_shift_hours": 4,
+            "max_shift_hours": 6,
+        },
+        {
+            "name": "Diana",
+            "is_keyholder": False,
+            "max_weekly_hours": 20,
+            "min_shift_hours": 4,
+            "max_shift_hours": 6,
         },
     ]
 
@@ -125,11 +159,13 @@ def setup():
             location="London",
             shop_type=ShopType.ICE_CREAM,
             session=session,
-            template_id=template.id,
+            template_id=str(template.id),
             address="Central Ave., London, UK",
             owner_email="owner@icecreamshop.com",
         )
         session.flush()
+
+        config = resolve_config(str(tenant.id), session)
 
         cat_by_name = {}
         for name in ["ice_cream", "soft_drink"]:
@@ -195,6 +231,21 @@ def setup():
 
         tenant_id = str(tenant.id)
 
+        for emp_data in employees:
+            emp = Employee(**emp_data, tenant_id=tenant.id)
+            session.add(emp)
+            session.flush()
+
+            for dow in range(6):
+                session.add(
+                    AvailabilityRule(
+                        employee_id=emp.id,
+                        day_of_week=dow,
+                        start_time=time(9, 0),
+                        end_time=time(19, 0),
+                    )
+                )
+
     log.info(
         "seed_complete",
         tenants=1,
@@ -205,12 +256,14 @@ def setup():
         supplier_items=sup_item_count,
     )
 
-    return tenant_id
+    return tenant_id, config
 
 
 def prefetch_weather(tenant_id: str):
     with SessionLocal() as session:
         tenant = session.get(Tenant, tenant_id)
+        if not tenant:
+            return
         lat = float(tenant.latitude)
         lng = float(tenant.longitude)
 
@@ -225,5 +278,5 @@ def prefetch_weather(tenant_id: str):
 
 if __name__ == "__main__":
     setup_logging()
-    tenant_id = setup()
+    tenant_id, _ = setup()
     prefetch_weather(tenant_id)

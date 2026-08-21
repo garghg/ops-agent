@@ -26,7 +26,7 @@ def poll_shop_times() -> None:
                 local_time.hour == config.schedule.opening_hour
                 and local_time.minute == config.schedule.opening_min
             ):
-                log.info("event_emitted", tenant_id=str(tenant.id), event="DAY_OPENED")
+                log.info("event_emitted", tenant_id=str(tenant.id), event_name="DAY_OPENED")
                 publish_event(
                     EventCategory.SYSTEM,
                     SystemEventType.DAY_OPENED.value,
@@ -39,7 +39,7 @@ def poll_shop_times() -> None:
                 local_time.hour == config.schedule.closing_hour
                 and local_time.minute == config.schedule.closing_min
             ):
-                log.info("event_emitted", tenant_id=str(tenant.id), event="DAY_CLOSED")
+                log.info("event_emitted", tenant_id=str(tenant.id), event_name="DAY_CLOSED")
                 publish_event(
                     EventCategory.SYSTEM,
                     SystemEventType.DAY_CLOSED.value,
@@ -52,7 +52,7 @@ def poll_shop_times() -> None:
                 local_time.hour == config.anomalies.checkpoint_hour
                 and local_time.minute == 0
             ):
-                log.info("event_emitted", tenant_id=str(tenant.id), event="INTRADAY_CHECKPOINT")
+                log.info("event_emitted", tenant_id=str(tenant.id), event_name="INTRADAY_CHECKPOINT")
                 publish_event(
                     EventCategory.SYSTEM,
                     SystemEventType.INTRADAY_CHECKPOINT.value,
@@ -70,7 +70,7 @@ def poll_shop_times() -> None:
                 log.info(
                     "event_emitted",
                     tenant_id=str(tenant.id),
-                    event="SCHEDULE_GENERATION_REQUESTED",
+                    event_name="SCHEDULE_GENERATION_REQUESTED",
                 )
                 publish_event(
                     EventCategory.WORKFORCE,

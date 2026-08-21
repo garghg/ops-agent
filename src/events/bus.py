@@ -22,7 +22,7 @@ def publish_event(
     priority: str,
     payload: dict,
     tenant_id: str,
-) -> str:
+) -> bytes | str:
     stream = f"{category.value}_events"
     return r.xadd(
         stream,

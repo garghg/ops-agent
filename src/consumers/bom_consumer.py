@@ -1,6 +1,6 @@
 import time
 
-import redis
+from redis.exceptions import TimeoutError
 from sqlalchemy import select
 
 from src.config import CLAIM_INTERVAL_SECONDS
@@ -162,7 +162,7 @@ def bom_consumer() -> None:
                 ConsumerGroup.BOM_CONSUMER.value,
                 CONSUMER_NAME,
             )
-        except redis.exceptions.TimeoutError:
+        except TimeoutError:
             events = []
 
         process_events(events)

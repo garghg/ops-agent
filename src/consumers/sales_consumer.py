@@ -1,6 +1,6 @@
 import time
 
-import redis
+from redis.exceptions import TimeoutError
 from sqlalchemy.exc import IntegrityError
 
 from src.config import CLAIM_INTERVAL_SECONDS
@@ -71,7 +71,7 @@ def sales_consumer():
                 ConsumerGroup.SALES_CONSUMER.value,
                 CONSUMER_NAME
             )
-        except redis.exceptions.TimeoutError:
+        except TimeoutError:
             events = []
         
         process_events(events)
