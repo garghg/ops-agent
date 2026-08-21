@@ -149,7 +149,7 @@ def compute_item_demand(session: Session, tenant_id: str, as_of_date: str):
                 quantile_grid = None
                 if forecast.quantile_grid:
                     quantile_grid = {
-                        gk: float(v * gv) for gk, gv in forecast.quantile_grid.items()
+                        gk: float(float(v) * gv) for gk, gv in forecast.quantile_grid.items()
                     }
 
                 stmt = insert(ItemDemandForecast).values(

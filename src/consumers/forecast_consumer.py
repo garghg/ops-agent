@@ -69,8 +69,10 @@ def process_events(events: list[dict]):
                 tenant_id,
             )
 
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             log.error("forecast_processing_failed", tenant_id=str(tenant_id), error=str(e))
+            import traceback
+            traceback.print_exc()
             r.xack(SYSTEM_STREAM, ConsumerGroup.FORECAST_CONSUMER.value, event["id"])
             continue
 

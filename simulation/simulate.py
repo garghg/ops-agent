@@ -1,6 +1,6 @@
 import threading
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -100,24 +100,16 @@ if __name__ == "__main__":
 
     transactions = load_transactions(TRANSACTION_PATH)
 
-    LIMIT_DAYS = 7
+    LIMIT_DAYS = 30
     transactions = dict(list(transactions.items())[:LIMIT_DAYS])
 
     products = load_products(PRODUCT_PATH)
 
-    start_date = min(transactions.keys())
-    end_date = max(transactions.keys())
-    current = start_date
-
-    while current <= end_date:
-        day_df = transactions.get(current)
-        _set_time(current, config.schedule.opening_hour, config.schedule.opening_min)
+    for day_date, day_df in transactions.items():
+        _set_time(day_date, config.schedule.opening_hour, config.schedule.opening_min)
         poll_shop_times()
 
-        if not day_df:
-            break
-
-        for i, row in day_df:
+        for i, row in day_df.iterrows():
             gtin = str(row["gtin"])
 
             with SessionLocal() as session:
@@ -153,23 +145,23 @@ if __name__ == "__main__":
             )
 
         _wait_for_consumers()
-        _set_time(current, 14, 0)
+            
+        _set_time(day_date, 14, 0)
         poll_shop_times()
         poll_proposals()
-        _set_time(current, config.schedule.closing_hour, config.schedule.closing_min)
+        _set_time(day_date, config.schedule.closing_hour, config.schedule.closing_min)
         poll_shop_times()
         sweep_outbox()
         poll_autonomy()
-        if current.weekday() == 0:
+        if day_date.weekday() == 0:
             poll_models()
             calibrate_schedule()
-        handle_proposals(tenant_id, current)
-        handle_deliveries(tenant_id, current)
+        handle_proposals(tenant_id, day_date)
+        handle_deliveries(tenant_id, day_date)
         handle_anomalies(tenant_id)
-        handle_autonomy(tenant_id, current)
-        handle_cycle_counts(tenant_id, current)
-        log.info(f"{current} - day complete")
-        current += timedelta(days=1)
+        handle_autonomy(tenant_id, day_date)
+        handle_cycle_counts(tenant_id, day_date)
+        log.info(f"{day_date} - day complete")
 
 
     log.info("simulation_complete")

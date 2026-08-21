@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
@@ -204,6 +205,8 @@ def champion_eval(session: Session, tenant_id: str, challenger: str, as_of_date:
     if not results:
         return
 
+    safe_evidence = {k: float(v) if isinstance(v, Decimal) else v for k, v in results.items()}
+
     result_row = BacktestResult(
         tenant_id=tenant_id,
         champion_version=cur_champion,
@@ -222,7 +225,7 @@ def champion_eval(session: Session, tenant_id: str, challenger: str, as_of_date:
             tenant_id=tenant_id,
             active_version=challenger,
             previous_version=cur_champion,
-            backtest_evidence=results,
+            backtest_evidence=safe_evidence,
             promoted_at=func.now(),
         )
         update_stmt = update_stmt.on_conflict_do_update(

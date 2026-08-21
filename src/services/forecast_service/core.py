@@ -267,7 +267,7 @@ def _train_model(
 def train_glm(
     session: Session, tenant_id: str, series: str, cutoff_date: date | None = None
 ):
-    return _train_model(session, tenant_id, series, PoissonRegressor(), cutoff_date)
+    return _train_model(session, tenant_id, series, PoissonRegressor(max_iter=300), cutoff_date)
 
 
 def train_lgbm(
@@ -490,7 +490,7 @@ def update_forecast_bias(session: Session, tenant_id: str, business_date: str):
         )
         raw_prediction = predicted / float(bias)
 
-        if raw_prediction <= 0:
+        if raw_prediction < 1.0:
             continue
 
         observation = actual / raw_prediction
