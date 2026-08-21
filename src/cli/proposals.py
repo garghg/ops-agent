@@ -401,7 +401,7 @@ def approve(po_id: str):
         )
         return
 
-    po.status = POStatus.APPROVED.value
+    po.status = POStatus.APPROVED
 
     session.add(
         POEvent(
@@ -492,9 +492,9 @@ def confirm(po_id: str):
         .where(POLine.purchase_order_id == po.id)
         .where(POLine.tenant_id == tenant.id)
     ).all()
-    po.total_value = sum(l.quantity_ordered * l.unit_cost for l in all_lines)
+    po.total_value = Decimal(sum(l.quantity_ordered * l.unit_cost for l in all_lines))
 
-    po.status = POStatus.CONFIRMED.value
+    po.status = POStatus.CONFIRMED
 
     session.add(
         POEvent(
@@ -572,7 +572,7 @@ def receive(po_id: str):
                 }
             )
 
-    po.status = POStatus.RECEIVED.value
+    po.status = POStatus.RECEIVED
 
     session.add(
         POEvent(
@@ -642,7 +642,7 @@ def reject(po_id: str):
         return
 
     old_status = po.status
-    po.status = POStatus.CANCELLED.value
+    po.status = POStatus.CANCELLED
 
     session.add(
         POEvent(
@@ -678,7 +678,10 @@ def edit(po_id: str):
 
     po, supplier = result
 
-    if po.status != POStatus.PROPOSED.value:
+    if (
+        po.status != POStatus.PROPOSED.value
+        and po.status != POStatus.SENT.value
+        ):
         console.print(f"[red]Cannot edit -- status is '{po.status}'.[/red]")
         return
 
@@ -695,7 +698,7 @@ def edit(po_id: str):
 
     show(str(po.id))
 
-    delPO = Prompt.ask("Delete PO [y/n]")
+    delPO = Prompt.ask("Cancel PO? [y/n]")
 
     if delPO == "y":
         old_status = po.status
