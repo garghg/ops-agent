@@ -75,8 +75,8 @@ def compute_shrinkage_rates(session: Session, physical_count_id, tenant_id):
         .join(InventoryTransaction, InventoryTransaction.item_id == InventoryItem.id)
         .join(Category, InventoryItem.category_id == Category.id)
         .where(InventoryItem.tenant_id == current_count.tenant_id)
-        .where(InventoryTransaction.created_at >= window_start)
-        .where(InventoryTransaction.created_at <= current_count.counted_at)
+        .where(InventoryTransaction.occurred_at >= window_start)
+        .where(InventoryTransaction.occurred_at <= current_count.counted_at)
         .where(InventoryTransaction.transaction_type.in_(SUBTRACT_TYPES))
         .where(
             InventoryTransaction.transaction_type
@@ -194,6 +194,13 @@ def apply_daily_shrinkage(session: Session, tenant_id: str, business_date: str):
             continue
 
         shrinkage_qty = float(row.total_usage) * float(factor)
+
+        item = next((i for i in items if i.id == row.item_id), None)
+        if item and shrinkage_qty > float(item.quantity_on_hand):
+            shrinkage_qty = max(0.0, float(item.quantity_on_hand))
+
+        if shrinkage_qty <= 0:
+            continue
 
         publish_event(
             EventCategory.INVENTORY,

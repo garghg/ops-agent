@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 from datetime import date, datetime
@@ -13,6 +14,7 @@ from simulation.operator import (
     handle_cycle_counts,
     handle_deliveries,
     handle_proposals,
+    handle_sent_orders,
 )
 from simulation.setup import prefetch_weather, setup
 from src.clock import set_virtual_time
@@ -88,6 +90,7 @@ def run_consumers():
 if __name__ == "__main__":
     setup_logging()
 
+    os.system("powershell.exe '[console]::beep(1000,500)'")
     log.info("setting up database")
     tenant_id, config = setup()
     prefetch_weather(tenant_id)
@@ -109,17 +112,21 @@ if __name__ == "__main__":
         _set_time(day_date, config.schedule.opening_hour, config.schedule.opening_min)
         poll_shop_times()
 
+        with SessionLocal() as session:
+            stock = {
+                row.name: float(row.quantity_on_hand)
+                for row in session.scalars(
+                    select(InventoryItem).where(InventoryItem.tenant_id == tenant_id)
+                ).all()
+            }
+            log.info("stock_taken")
+
         for i, row in day_df.iterrows():
             gtin = str(row["gtin"])
-
-            with SessionLocal() as session:
-                item = session.scalar(
-                    select(InventoryItem.quantity_on_hand)
-                    .where(InventoryItem.name == products[gtin]["name"])
-                    .where(InventoryItem.tenant_id == tenant_id)
-                )
-                if item is not None and item <= 0:
-                    continue
+            name = products[gtin]["name"]
+            if stock.get(name, 0) <= 0:
+                continue
+            stock[name] -= 1
 
             sale_payload = {
                 "external_transaction_id": f"{gtin}_{row['sales_date_time']}_{i}",
@@ -151,12 +158,14 @@ if __name__ == "__main__":
         poll_proposals()
         _set_time(day_date, config.schedule.closing_hour, config.schedule.closing_min)
         poll_shop_times()
+        _wait_for_consumers()
         sweep_outbox()
         poll_autonomy()
         if day_date.weekday() == 0:
             poll_models()
             calibrate_schedule()
         handle_proposals(tenant_id, day_date)
+        handle_sent_orders(tenant_id)
         handle_deliveries(tenant_id, day_date)
         handle_anomalies(tenant_id)
         handle_autonomy(tenant_id, day_date)
@@ -165,3 +174,4 @@ if __name__ == "__main__":
 
 
     log.info("simulation_complete")
+    os.system("powershell.exe '[console]::beep(1000,500)'")

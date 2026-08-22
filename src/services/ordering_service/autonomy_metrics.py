@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from src.clock import get_now
 from src.db.models import AutonomyEvent, CapabilityState, POEvent, PurchaseOrder, Tenant
 from src.schemas.autonomy import AutonomyEventType, AutonomyState
 from src.schemas.orders import OrderBy
@@ -20,7 +21,7 @@ from src.services.ordering_service.config import (
 )
 
 
-def rollup(session: Session, tenant_id: str, supplier_id: str) -> dict:
+def rollup(session: Session, tenant_id: str, supplier_id: str) -> dict | None:
     proposals = session.scalars(
         select(POEvent)
         .join(PurchaseOrder, POEvent.purchase_order_id == PurchaseOrder.id)
@@ -119,7 +120,9 @@ def rollup(session: Session, tenant_id: str, supplier_id: str) -> dict:
 
 def evaluate_promotion(session: Session, tenant_id: str, supplier_id: str):
     timezone = session.scalar(select(Tenant.timezone).where(Tenant.id == tenant_id))
-    local_today = datetime.now(ZoneInfo(timezone)).date()
+    if not timezone:
+        return
+    local_today = get_now().astimezone(ZoneInfo(timezone)).date()
     local_start = datetime.combine(local_today, time.min, tzinfo=ZoneInfo(timezone))
     local_end = local_start + timedelta(days=1)
 
@@ -170,6 +173,7 @@ def evaluate_promotion(session: Session, tenant_id: str, supplier_id: str):
             from_state=AutonomyState.PROPOSE_ONLY.value,
             to_state=AutonomyState.PROPOSE_ONLY.value,
             reason=f"Promotion eligible - {evidence}",
+            created_at=get_now(),
         )
     )
     session.commit()
@@ -208,6 +212,7 @@ def evaluate_demotion(session: Session, tenant_id: str, supplier_id: str):
             from_state=AutonomyState.AUTO_WITHIN_BOUNDS.value,
             to_state=AutonomyState.PROPOSE_ONLY.value,
             reason=f"Auto-demoted -- {', '.join(reasons)}",
+            created_at=get_now(),
         )
     )
     session.commit()

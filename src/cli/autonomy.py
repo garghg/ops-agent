@@ -4,6 +4,7 @@ from rich.table import Table
 from sqlalchemy import select
 
 from src.cli.context import get_tenant
+from src.clock import get_now
 from src.db.models import (
     AutonomyEvent,
     CapabilityState,
@@ -91,6 +92,7 @@ def grant(supplier_id: str):
             from_state=old_state or AutonomyState.PROPOSE_ONLY.value,
             to_state=AutonomyState.AUTO_WITHIN_BOUNDS.value,
             reason="Owner granted via CLI",
+            created_at=get_now(),
         )
     )
 
@@ -133,6 +135,7 @@ def revoke(supplier_id: str):
             from_state=AutonomyState.AUTO_WITHIN_BOUNDS.value,
             to_state=AutonomyState.PROPOSE_ONLY.value,
             reason="Owner revoked via CLI",
+            created_at=get_now(),
         )
     )
 

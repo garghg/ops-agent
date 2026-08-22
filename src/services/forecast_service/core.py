@@ -8,6 +8,8 @@ import pandas as pd
 from lightgbm import LGBMRegressor
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import PoissonRegressor
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
@@ -232,6 +234,7 @@ def _train_model(
         select(DailyActual)
         .where(DailyActual.tenant_id == tenant_id)
         .where(DailyActual.series == series)
+        .where(DailyActual.value > 0)
     )
 
     if cutoff_date is not None:
@@ -267,7 +270,11 @@ def _train_model(
 def train_glm(
     session: Session, tenant_id: str, series: str, cutoff_date: date | None = None
 ):
-    return _train_model(session, tenant_id, series, PoissonRegressor(max_iter=300), cutoff_date)
+    return _train_model(
+        session, tenant_id, series,
+        make_pipeline(StandardScaler(), PoissonRegressor(max_iter=1000)),
+        cutoff_date,
+    )
 
 
 def train_lgbm(

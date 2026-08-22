@@ -1,5 +1,4 @@
 import time
-from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import redis
@@ -7,6 +6,7 @@ from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from src.clock import get_now
 from src.config import CLAIM_INTERVAL_SECONDS
 from src.consumers.utils import CONSUMER_NAME
 from src.db.models import (
@@ -60,12 +60,20 @@ def process_events(events: list[dict]) -> None:
                     select(Tenant.timezone).where(Tenant.id == tenant_id)
                 )
 
+                if not timezone:
+                    r.xack(EMAIL_STREAM, ConsumerGroup.EMAIL_CONSUMER.value, event["id"])
+                    continue
+
                 result = session.execute(
                     select(PurchaseOrder, Supplier)
                     .join(Supplier, PurchaseOrder.supplier_id == Supplier.id)
                     .where(PurchaseOrder.id == po_id)
                     .where(PurchaseOrder.tenant_id == tenant_id)
                 ).first()
+
+                if not result:
+                    r.xack(EMAIL_STREAM, ConsumerGroup.EMAIL_CONSUMER.value, event["id"])
+                    continue
 
                 po, supplier = result
 
@@ -76,7 +84,7 @@ def process_events(events: list[dict]) -> None:
                 )
 
                 if changed_by == OrderBy.SYSTEM.value and not autonomy_checks(
-                    session, timezone, tenant_id, po, supplier, state
+                    session, timezone, tenant_id, po, supplier, state # type: ignore
                 ):
                     po.status = POStatus.PROPOSED.value
                     session.add(
@@ -87,6 +95,7 @@ def process_events(events: list[dict]) -> None:
                             to_status=POStatus.PROPOSED.value,
                             changed_by=OrderBy.SYSTEM.value,
                             note="Executor rejected: autonomy bounds failed re-check",
+                            created_at=get_now(),
                         )
                     )
                     session.add(
@@ -97,6 +106,7 @@ def process_events(events: list[dict]) -> None:
                             from_state=AutonomyState.AUTO_WITHIN_BOUNDS.value,
                             to_state=AutonomyState.AUTO_WITHIN_BOUNDS.value,
                             reason="Autonomy bounds failed re-check at executor",
+                            created_at=get_now(),
                         )
                     )
                     log.warning(
@@ -119,6 +129,10 @@ def process_events(events: list[dict]) -> None:
                 ).all()
 
                 tenant = session.scalar(select(Tenant).where(Tenant.id == tenant_id))
+
+                if not tenant:
+                    r.xack(EMAIL_STREAM, ConsumerGroup.EMAIL_CONSUMER.value, event["id"])
+                    continue
 
                 html = template.render(
                     supplier_name=supplier.name,
@@ -145,7 +159,7 @@ def process_events(events: list[dict]) -> None:
                 )
 
                 if changed_by == OrderBy.SYSTEM.value:
-                    today = datetime.now(ZoneInfo(timezone)).date()
+                    today = get_now().astimezone(ZoneInfo(timezone)).date()
                     session.add(
                         SpendLedger(
                             tenant_id=tenant_id,
@@ -182,7 +196,7 @@ def email_consumer():
                 ConsumerGroup.EMAIL_CONSUMER.value,
                 CONSUMER_NAME,
             )
-        except redis.exceptions.TimeoutError:
+        except redis.exceptions.TimeoutError: # type: ignore
             events = []
 
         process_events(events)

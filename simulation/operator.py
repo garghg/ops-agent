@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from sqlalchemy import exists, func, select
 
+from src.clock import get_now
 from src.db.models import (
     Anomaly,
     AnomalyFeedback,
@@ -56,6 +57,7 @@ def handle_proposals(tenant_id: str, business_date: date):
                         from_status=POStatus.PROPOSED.value,
                         to_status=POStatus.CANCELLED.value,
                         changed_by=OrderBy.OWNER.value,
+                        created_at=get_now(),
                     )
                 )
                 evaluate_demotion(session, tenant_id, str(proposal.supplier_id))
@@ -117,6 +119,7 @@ def handle_proposals(tenant_id: str, business_date: date):
                     from_status=POStatus.PROPOSED.value,
                     to_status=POStatus.APPROVED.value,
                     changed_by=OrderBy.OWNER.value,
+                    created_at=get_now(),
                 )
             )
             proposal.status = POStatus.SENT
@@ -130,6 +133,7 @@ def handle_proposals(tenant_id: str, business_date: date):
                     from_status=POStatus.APPROVED.value,
                     to_status=POStatus.SENT.value,
                     changed_by=OrderBy.SYSTEM.value,
+                    created_at=get_now(),
                 )
             )
             lead_days = session.scalar(
@@ -148,10 +152,36 @@ def handle_proposals(tenant_id: str, business_date: date):
                     from_status=POStatus.SENT.value,
                     to_status=POStatus.CONFIRMED.value,
                     changed_by=OrderBy.OWNER.value,
+                    created_at=get_now(),
                 )
             )
 
         session.commit()
+
+
+def handle_sent_orders(tenant_id: str):
+    with SessionLocal() as session:
+        sent = session.scalars(
+            select(PurchaseOrder)
+            .where(PurchaseOrder.tenant_id == tenant_id)
+            .where(PurchaseOrder.status == POStatus.SENT.value)
+        ).all()
+
+        for po in sent:
+            po.status = POStatus.CONFIRMED
+            session.add(
+                POEvent(
+                    tenant_id=tenant_id,
+                    purchase_order_id=po.id,
+                    from_status=POStatus.SENT.value,
+                    to_status=POStatus.CONFIRMED.value,
+                    changed_by=OrderBy.OWNER.value,
+                    created_at=get_now(),
+                )
+            )
+
+        session.commit()
+
 
 def handle_deliveries(tenant_id: str, business_date: date):
     with SessionLocal() as session:
@@ -192,6 +222,7 @@ def handle_deliveries(tenant_id: str, business_date: date):
                     from_status=POStatus.CONFIRMED.value,
                     to_status=POStatus.RECEIVED.value,
                     changed_by=OrderBy.OWNER.value,
+                    created_at=get_now(),
                 )
             )
 
@@ -311,6 +342,7 @@ def handle_autonomy(tenant_id: str, business_date: date):
                     from_state=AutonomyState.PROPOSE_ONLY.value,
                     to_state=AutonomyState.AUTO_WITHIN_BOUNDS.value,
                     reason="Owner granted (sim)",
+                    created_at=get_now(),
                 )
             )
         session.commit()

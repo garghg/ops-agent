@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from math import ceil
 from zoneinfo import ZoneInfo
@@ -10,6 +10,7 @@ from rich.table import Table
 from sqlalchemy import func, select
 
 from src.cli.context import get_tenant
+from src.clock import get_now
 from src.db.models import (
     InventoryItem,
     POEvent,
@@ -222,6 +223,7 @@ def create(supplier_id: str):
         ordered_at=func.now(),
         expected_delivery=date.fromisoformat(delivery_date),
         created_by=OrderBy.OWNER.value,
+        created_at=get_now(),
     )
     session.add(po)
     session.flush()
@@ -246,6 +248,7 @@ def create(supplier_id: str):
             to_status=POStatus.CONFIRMED.value,
             changed_by=OrderBy.OWNER.value,
             note="Manual order created via CLI",
+            created_at=get_now(),
         )
     )
 
@@ -331,6 +334,7 @@ def receive_standing(supplier_id: str):
         total_value=total_value,
         actual_delivery=date.fromisoformat(receive_date),
         created_by=OrderBy.OWNER.value,
+        created_at=get_now(),
     )
     session.add(po)
     session.flush()
@@ -356,6 +360,7 @@ def receive_standing(supplier_id: str):
             to_status=POStatus.RECEIVED.value,
             changed_by=OrderBy.OWNER.value,
             note="Standing delivery received via CLI",
+            created_at=get_now(),
         )
     )
 
@@ -411,6 +416,7 @@ def approve(po_id: str):
             to_status=POStatus.APPROVED.value,
             changed_by=OrderBy.OWNER.value,
             note="Approved via CLI",
+            created_at=get_now(),
         )
     )
 
@@ -467,9 +473,14 @@ def confirm(po_id: str):
             original = line.quantity_ordered
             line.quantity_ordered = Decimal(new_qty)
             edits.append(
-                {"item": item.name, "from": float(original), "to": float(new_qty), "supplier_item_id": str(line.supplier_item_id)}
+                {
+                    "item": item.name,
+                    "from": float(original),
+                    "to": float(new_qty),
+                    "supplier_item_id": str(line.supplier_item_id),
+                }
             )
-    
+
     config = resolve_config(str(tenant.id), session)
     if edits:
         for edit in edits:
@@ -484,7 +495,7 @@ def confirm(po_id: str):
                     config.learning.order_edit_half_life,
                     config.learning.order_edit_clamp_low,
                     config.learning.order_edit_clamp_high,
-                    datetime.now(ZoneInfo(tenant.timezone)).date(),
+                    get_now().astimezone(ZoneInfo(tenant.timezone)).date(),
                 )
 
     all_lines = session.scalars(
@@ -492,6 +503,7 @@ def confirm(po_id: str):
         .where(POLine.purchase_order_id == po.id)
         .where(POLine.tenant_id == tenant.id)
     ).all()
+
     po.total_value = Decimal(sum(l.quantity_ordered * l.unit_cost for l in all_lines))
 
     po.status = POStatus.CONFIRMED
@@ -505,6 +517,7 @@ def confirm(po_id: str):
             changed_by=OrderBy.OWNER.value,
             note=f"Confirmed via CLI. Edits: {edits}" if edits else "Confirmed via CLI",
             edits=edits,
+            created_at=get_now(),
         )
     )
 
@@ -584,6 +597,7 @@ def receive(po_id: str):
             note=f"Received via CLI. Discrepancies: {discrepancies}"
             if discrepancies
             else "Received via CLI",
+            created_at=get_now(),
         )
     )
 
@@ -652,6 +666,7 @@ def reject(po_id: str):
             to_status=POStatus.CANCELLED.value,
             changed_by=OrderBy.OWNER.value,
             note="Rejected via CLI",
+            created_at=get_now(),
         )
     )
 
@@ -678,10 +693,7 @@ def edit(po_id: str):
 
     po, supplier = result
 
-    if (
-        po.status != POStatus.PROPOSED.value
-        and po.status != POStatus.SENT.value
-        ):
+    if po.status != POStatus.PROPOSED.value and po.status != POStatus.SENT.value:
         console.print(f"[red]Cannot edit -- status is '{po.status}'.[/red]")
         return
 
@@ -711,6 +723,7 @@ def edit(po_id: str):
                 to_status=POStatus.CANCELLED.value,
                 changed_by=OrderBy.OWNER.value,
                 note="Cancelled during edit",
+                created_at=get_now(),
             )
         )
         session.commit()
@@ -727,12 +740,22 @@ def edit(po_id: str):
         if new_quantity and new_quantity != "0":
             line.quantity_ordered = Decimal(new_quantity)
             edits.append(
-                {"item": item.name, "from": float(original), "to": float(new_quantity), "supplier_item_id": str(line.supplier_item_id)}
+                {
+                    "item": item.name,
+                    "from": float(original),
+                    "to": float(new_quantity),
+                    "supplier_item_id": str(line.supplier_item_id),
+                }
             )
         elif new_quantity == "0":
             session.delete(line)
             edits.append(
-                {"item": item.name, "from": float(original), "to": float(0), "supplier_item_id": str(line.supplier_item_id)}
+                {
+                    "item": item.name,
+                    "from": float(original),
+                    "to": float(0),
+                    "supplier_item_id": str(line.supplier_item_id),
+                }
             )
 
     if po.suggested_topups:
@@ -766,9 +789,14 @@ def edit(po_id: str):
             session.flush()
 
             edits.append(
-                {"item": suggested["name"], "from": 0, "to": float(quantity_ordered), "supplier_item_id": suggested["supplier_item_id"]}
+                {
+                    "item": suggested["name"],
+                    "from": 0,
+                    "to": float(quantity_ordered),
+                    "supplier_item_id": suggested["supplier_item_id"],
+                }
             )
-            
+
     if not edits:
         console.print("[yellow]No changes made.[/yellow]")
         return
@@ -786,7 +814,7 @@ def edit(po_id: str):
                 config.learning.order_edit_half_life,
                 config.learning.order_edit_clamp_low,
                 config.learning.order_edit_clamp_high,
-                datetime.now(ZoneInfo(tenant.timezone)).date(),
+                get_now().astimezone(ZoneInfo(tenant.timezone)).date(),
             )
 
     remaining_lines = session.scalars(
@@ -805,6 +833,7 @@ def edit(po_id: str):
                 to_status=POStatus.CANCELLED.value,
                 changed_by=OrderBy.OWNER.value,
                 note="All lines removed during edit",
+                created_at=get_now(),
             )
         )
         session.commit()
@@ -823,6 +852,7 @@ def edit(po_id: str):
             changed_by=OrderBy.OWNER.value,
             note=f"Edited via CLI: {edits}",
             edits=edits,
+            created_at=get_now(),
         )
     )
 

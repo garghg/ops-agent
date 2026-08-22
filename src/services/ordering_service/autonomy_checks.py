@@ -1,10 +1,11 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from src.clock import get_now
 from src.db.models import PurchaseOrder, SpendLedger, Supplier
 from src.schemas.autonomy import AutonomyState
 from src.schemas.suppliers import POStatus
@@ -20,7 +21,7 @@ def autonomy_checks(
     state: str,
 ) -> bool:
     config = resolve_config(tenant_id, session)
-    today = datetime.now(ZoneInfo(timezone)).date()
+    today = get_now().astimezone(ZoneInfo(timezone)).date()
     this_monday = today - timedelta(days=today.weekday())
 
     daily_spend = session.scalar(

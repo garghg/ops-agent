@@ -4,6 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.adapters import SenderAdapter
+from src.clock import get_now
 from src.db.models import EmailOutbox, POEvent, PurchaseOrder
 from src.schemas.email import EmailStatus
 from src.schemas.orders import OrderBy
@@ -45,7 +46,8 @@ def process_outbox(session: Session, sender: SenderAdapter, tenant_id: str):
                     from_status=old_status,
                     to_status=POStatus.SENT.value,
                     changed_by=OrderBy.SYSTEM.value,
-                    note="Email sent to supplier"
+                    note="Email sent to supplier",
+                    created_at=get_now(),
                 ))
         else:
             email.status = EmailStatus.FAILED.value

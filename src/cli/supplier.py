@@ -1,4 +1,3 @@
-from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
 
@@ -9,6 +8,7 @@ from rich.table import Table
 from sqlalchemy import func, select
 
 from src.cli.context import get_tenant
+from src.clock import get_now
 from src.db.models import (
     InventoryItem,
     Supplier,
@@ -245,12 +245,16 @@ def link_item():
                 f"    {inv.name} -- ${si.cost_per_unit}/{inv.unit} (pack: {si.pack_size})"
             )
 
-    # Show unlinked items
-    unlinked = session.scalars(
-        select(InventoryItem)
+    query = (
+    select(InventoryItem)
         .where(InventoryItem.tenant_id == tenant.id)
-        .where(InventoryItem.id.not_in(linked_ids) if linked_ids else True)
-        .order_by(InventoryItem.name)
+    )
+
+    if linked_ids:
+        query = query.where(InventoryItem.id.not_in(linked_ids))
+
+    unlinked = session.scalars(
+        query.order_by(InventoryItem.name)
     ).all()
 
     if not unlinked:
@@ -395,7 +399,7 @@ def update_cost():
         console.print("[yellow]Cancelled.[/yellow]")
         return
 
-    today = datetime.now(ZoneInfo(tenant.timezone)).date()
+    today = get_now().astimezone(ZoneInfo(tenant.timezone)).date()
 
     session.add(
         SupplierItemCostHistory(

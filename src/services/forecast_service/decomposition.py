@@ -67,6 +67,13 @@ def compute_share_vectors(session: Session, tenant_id: str, as_of_date: str):
             (item_id, sale_date), 0
         )
 
+    all_item_ids = {k[0] for k in item_map}
+    all_dates = {k[1] for k in item_map}
+    for item_id in all_item_ids:
+        for sale_date in all_dates:
+            if (item_id, sale_date) not in item_map:
+                item_map[(item_id, sale_date)] = 0
+
     actuals_date_map = {actual.actual_date: actual for actual in actuals}
 
     shares = defaultdict(list)

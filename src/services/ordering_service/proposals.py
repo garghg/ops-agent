@@ -6,6 +6,7 @@ from math import ceil
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from src.clock import get_now
 from src.db.models import (
     CapabilityState,
     DecisionLog,
@@ -163,6 +164,7 @@ def generate_proposals(
                 status=POStatus.PROPOSED.value,
                 total_value=Decimal(0),
                 created_by=OrderBy.SYSTEM.value,
+                created_at=get_now(),
             )
             session.add(po)
             session.flush()
@@ -296,6 +298,7 @@ def generate_proposals(
                 note="Auto-generated proposal"
                 if is_new
                 else "Proposal updated with current quantities",
+                created_at=get_now(),
             )
         )
 
@@ -351,6 +354,7 @@ def generate_proposals(
                     to_status=POStatus.APPROVED.value,
                     changed_by=OrderBy.SYSTEM.value,
                     note="Auto-approved within autonomy bounds",
+                    created_at=get_now(),
                 )
             )
 
@@ -370,7 +374,10 @@ def generate_proposals(
             EventCategory.PROCUREMENT,
             ProcurementEventType.PO_APPROVED.value,
             "2",
-            {"purchase_order_id": evt["purchase_order_id"]},
+            {
+                "purchase_order_id": evt["purchase_order_id"],
+                "changed_by": evt["changed_by"],
+            },
             evt["tenant_id"],
         )
     return processed_pos
