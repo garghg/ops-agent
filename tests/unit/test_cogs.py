@@ -23,7 +23,7 @@ def _create_sale(
 
     txn = SaleTransaction(
         tenant_id=tenant_id,
-        external_transaction_id=f"test-{item_name}-{days_ago}-{id(modifiers)}",
+        external_transaction_id=f"test-{item_name}-{days_ago}-{'-'.join(modifiers)}",
         source="test",
         timestamp=ts,
         total=unit_price * quantity,

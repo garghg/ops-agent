@@ -63,19 +63,20 @@ def _wait_for_consumers(max_wait: int = 30):
     streams = [f"{cat.value}_events" for cat in EventCategory]
 
     for _ in range(max_wait):
-        total_pending = 0
+        total = 0
         for stream in streams:
             try:
                 groups = r.xinfo_groups(stream)
-                total_pending += sum(g["pending"] for g in groups)
+                for g in groups:
+                    total += g["pending"]
+                    total += g.get("lag", 0) or 0
             except Exception:  # noqa: BLE001, S112
                 continue
-        if total_pending == 0:
+        if total == 0:
             return
         time.sleep(1)
 
-    log.warning("consumers_still_behind", pending=total_pending, max_wait=max_wait)  # type: ignore
-
+    log.warning("consumers_still_behind", remaining=total, max_wait=max_wait) # type: ignore
 
 def run_consumers():
     setup_logging()
@@ -167,7 +168,7 @@ if __name__ == "__main__":
         handle_proposals(tenant_id, day_date)
         handle_sent_orders(tenant_id)
         handle_deliveries(tenant_id, day_date)
-        handle_anomalies(tenant_id)
+        handle_anomalies(tenant_id, day_date)
         handle_autonomy(tenant_id, day_date)
         handle_cycle_counts(tenant_id, day_date)
         log.info(f"{day_date} - day complete")

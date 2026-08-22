@@ -1,4 +1,5 @@
 import time
+from decimal import Decimal
 
 import redis
 from sqlalchemy import select
@@ -10,8 +11,15 @@ from src.consumers.utils import CONSUMER_NAME
 from src.db.models import InventoryItem, InventoryTransaction
 from src.db.session import SessionLocal
 from src.events.bus import claim_pending_events, r, read_event
+from src.schemas.anomaly import AnomalySubject, AnomalyType
 from src.schemas.event import ConsumerGroup, EventCategory
-from src.schemas.inventory import SUBTRACT_TYPES, InventoryEventPayload
+from src.schemas.inventory import (
+    SUBTRACT_TYPES,
+    InventoryEventPayload,
+    InventoryTransactionType,
+)
+from src.services.anomaly_service import persist_anomaly
+from src.services.config_services import resolve_config
 from src.services.health_service import record_heartbeat
 
 INVENTORY_STREAM = f"{EventCategory.INVENTORY.value}_events"
@@ -28,7 +36,8 @@ def process_events(events: list[dict]) -> None:
             continue
 
         try:
-            with SessionLocal() as session, session.begin():
+            with SessionLocal() as session:
+                config = resolve_config(tenant_id, session)
                 item = session.scalar(
                     select(InventoryItem).where(
                         InventoryItem.id == payload.item_id,
@@ -40,7 +49,37 @@ def process_events(events: list[dict]) -> None:
 
                 magnitude = abs(payload.quantity)
                 if payload.transaction_type in SUBTRACT_TYPES:
-                    item.quantity_on_hand -= magnitude
+                    if (
+                        payload.transaction_type == InventoryTransactionType.SHRINKAGE
+                        and item.quantity_on_hand - magnitude < 0
+                    ):
+                        capped = max(Decimal(0), item.quantity_on_hand)
+                        if capped <= 0:
+                            r.xack(
+                                INVENTORY_STREAM,
+                                ConsumerGroup.STOCK_UPDATER.value,
+                                event["id"],
+                            )
+                            continue
+                        payload.quantity = capped
+                        item.quantity_on_hand -= capped
+                    else:
+                        item.quantity_on_hand -= magnitude
+                        if item.quantity_on_hand < 0:
+                            persist_anomaly(
+                                session,
+                                tenant_id,
+                                AnomalyType.INVENTORY_UNDERFLOW,
+                                f"{AnomalySubject.NEGATIVE_STOCK}:{item.id}",
+                                1,
+                                get_now().date(),
+                                {
+                                    "inventory": float(item.quantity_on_hand),
+                                    "transaction": float(magnitude),
+                                },
+                                f"{item.name} inventory went negative ({float(item.quantity_on_hand)}) after depleting {float(magnitude)} units. Possible missed restock or count error. Please recount.",
+                                config.anomalies.cooldown_hours,
+                            )
                 else:
                     item.quantity_on_hand += magnitude
 
@@ -50,11 +89,16 @@ def process_events(events: list[dict]) -> None:
                         quantity_change=payload.quantity,
                         transaction_type=payload.transaction_type,
                         note=payload.note,
-                        event_id=payload.source_key if payload.source_key else event["id"],
+                        event_id=payload.source_key
+                        if payload.source_key
+                        else event["id"],
                         tenant_id=tenant_id,
-                        occurred_at=get_now()
+                        occurred_at=get_now(),
                     )
                 )
+
+                session.commit()
+            
         except ValueError as e:
             print(f"Skipping event {event['id']}: {e}")
             r.xack(INVENTORY_STREAM, ConsumerGroup.STOCK_UPDATER.value, event["id"])
@@ -78,7 +122,7 @@ def stock_updater() -> None:
                 ConsumerGroup.STOCK_UPDATER.value,
                 CONSUMER_NAME,
             )
-        except redis.exceptions.TimeoutError:
+        except redis.exceptions.TimeoutError:  # type: ignore
             events = []
 
         process_events(events)

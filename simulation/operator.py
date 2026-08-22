@@ -21,7 +21,7 @@ from src.db.models import (
 )
 from src.db.session import SessionLocal
 from src.events.bus import publish_event
-from src.schemas.anomaly import AnomalyAction
+from src.schemas.anomaly import AnomalyAction, AnomalyType
 from src.schemas.autonomy import AutonomyEventType, AutonomyState
 from src.schemas.event import EventCategory, InventoryEventType
 from src.schemas.inventory import InventoryTransactionType
@@ -256,7 +256,7 @@ def handle_deliveries(tenant_id: str, business_date: date):
         session.commit()
 
 
-def handle_anomalies(tenant_id: str):
+def handle_anomalies(tenant_id: str, business_date: date):
     with SessionLocal() as session:
         anomalies = session.scalars(
             select(Anomaly)
@@ -274,6 +274,46 @@ def handle_anomalies(tenant_id: str):
             return
 
         for anomaly in anomalies:
+            if anomaly.anomaly_type == AnomalyType.INVENTORY_UNDERFLOW:
+                item_id = anomaly.subject.split(":", 1)[1]
+                item = session.scalar(
+                    select(InventoryItem).where(
+                        InventoryItem.id == item_id,
+                        InventoryItem.tenant_id == tenant_id,
+                    )
+                )
+                if item and item.quantity_on_hand < 0:
+                    count = PhysicalCount(
+                        tenant_id=tenant_id,
+                        counted_at=datetime.combine(
+                            business_date, datetime.min.time(), tzinfo=UTC
+                        ),
+                        counted_by="owner (sim-underflow)",
+                    )
+                    session.add(count)
+                    session.flush()
+
+                    session.add(
+                        CountLine(
+                            tenant_id=tenant_id,
+                            physical_count_id=count.id,
+                            inventory_item_id=item.id,
+                            expected_quantity=item.quantity_on_hand,
+                            actual_quantity=Decimal(0),
+                            discrepancy=Decimal(0) - item.quantity_on_hand,
+                        )
+                    )
+                    item.quantity_on_hand = Decimal(0)
+
+                session.add(
+                    AnomalyFeedback(
+                        tenant_id=tenant_id,
+                        anomaly_id=anomaly.id,
+                        action=AnomalyAction.ACK,
+                    )
+                )
+                continue
+
             if random.random() < 0.75:
                 session.add(
                     AnomalyFeedback(

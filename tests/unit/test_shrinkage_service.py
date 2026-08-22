@@ -92,6 +92,7 @@ def _add_depletions(session, item, qty, time):
         quantity_change=-abs(qty),
         transaction_type=InventoryTransactionType.USAGE,
         created_at=time,
+        occurred_at=time,
         event_id=f"test-{item.id}-{time.isoformat()}",
     ))
     session.flush()

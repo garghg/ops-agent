@@ -8,14 +8,12 @@ from pydantic import BaseModel
 class InventoryTransactionType(str, Enum):
     RESTOCK = "restock"
     USAGE = "usage"
-    WASTE = "waste"
     ADJUSTMENT_ADD = "adjustment_add"
     ADJUSTMENT_SUB = "adjustment_sub"
     SHRINKAGE = "shrinkage"
 
 SUBTRACT_TYPES = {
     InventoryTransactionType.USAGE,
-    InventoryTransactionType.WASTE,
     InventoryTransactionType.ADJUSTMENT_SUB,
     InventoryTransactionType.SHRINKAGE,
 }

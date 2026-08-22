@@ -8,6 +8,7 @@ class AnomalyType:
     CONDITION_CHANGE = "condition_change"
     MARGIN_FLOOR = "margin_floor"
     COUNT_DISCREPANCY = "count_discrepancy"
+    INVENTORY_UNDERFLOW = "inventory_underflow"
     
 class AnomalySubject:
     TOTAL_UNITS = "total_units"
@@ -16,6 +17,7 @@ class AnomalySubject:
     REFUND_RATE = "refund_rate"
     DISCOUNT_RATE = "discount_rate"
     MARGIN_FLOOR = "margin_floor"
+    NEGATIVE_STOCK = "negative_stock"
     
 class AnomalyAction:
     ACK = "ack"

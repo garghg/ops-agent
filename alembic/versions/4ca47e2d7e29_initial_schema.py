@@ -78,7 +78,7 @@ def upgrade() -> None:
     sa.Column('note', sa.Text(), nullable=True),
     sa.Column('event_id', sa.Text(), nullable=False),
     sa.Column('tenant_id', sa.UUID(), nullable=False),
-    sa.CheckConstraint("transaction_type IN ('restock', 'usage', 'waste', 'adjustment_add', 'adjustment_sub')", name='inventory_transactions_transaction_type_check'),
+    sa.CheckConstraint("transaction_type IN ('restock', 'usage', 'shrinkage', 'adjustment_add', 'adjustment_sub')", name='inventory_transactions_transaction_type_check'),
     sa.ForeignKeyConstraint(['item_id'], ['inventory_items.id'], ondelete='RESTRICT'),
     sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], ondelete='RESTRICT'),
     sa.PrimaryKeyConstraint('id'),
